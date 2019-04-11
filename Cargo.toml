@@ -1,0 +1,20 @@
+[package]
+name = "web30"
+version = "0.1.0"
+authors = ["Michal Papierski"]
+description = "10x better than web3"
+license = "Apache-2.0"
+
+[dependencies]
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+clarity = "0.1"
+futures-timer = "0.1"
+num256 = "0.2"
+futures = "0.1"
+failure = "0.1"
+actix-web = {version = "0.7",  default-features = false}
+tokio = "0.1"
+actix = "0.7"
+log = "0.4"
