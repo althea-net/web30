@@ -6,7 +6,7 @@
 //!
 use crate::jsonrpc::client::{Client, HTTPClient};
 use crate::types::{Log, NewFilter, TransactionRequest, TransactionResponse};
-use clarity::abi::derive_signature;
+use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use failure::Error;
@@ -160,7 +160,8 @@ impl Web3 {
             .request_method("evm_revert", vec![format!("{:#066x}", snapshot_id)])
     }
 
-    pub fn send_raw_transaction(
+    /// Sends a transaction which changes blockchain state.
+    pub fn send_transaction(
         &self,
         to_address: Address,
         data: Vec<u8>,
@@ -168,6 +169,7 @@ impl Web3 {
         own_address: Address,
         secret: PrivateKey,
     ) -> Box<Future<Item = Uint256, Error = Error>> {
+        let salf = self.clone();
         let props = self
             .eth_gas_price()
             .join(self.eth_get_transaction_count(own_address));
@@ -187,12 +189,125 @@ impl Web3 {
 
                     let transaction = transaction.sign(&secret, Some(1u64));
 
-                    self.eth_send_raw_transaction(
+                    salf.eth_send_raw_transaction(
                         transaction
                             .to_bytes()
                             .expect("transaction.to_bytes() failed"),
                     )
                 })
+                .into_future(),
+        )
+    }
+
+    /// Sends a transaction which does not change blockchain state, usually to get information.
+    pub fn contract_call(
+        &self,
+        contract_address: Address,
+        sig: &str,
+        tokens: &[Token],
+        own_address: Address,
+    ) -> Box<Future<Item = Uint256, Error = Error>> {
+        let salf = self.clone();
+
+        let props = salf
+            .eth_gas_price()
+            .join(salf.eth_get_transaction_count(own_address));
+
+        let payload = encode_call(sig, tokens);
+
+        Box::new(
+            props
+                .and_then(move |(gas_price, nonce)| {
+                    let transaction = TransactionRequest {
+                        from: own_address,
+                        to: Some(contract_address),
+                        nonce: Some(nonce),
+                        gas: None,
+                        gas_price: gas_price.into(),
+                        value: Some(0u64.into()),
+                        data: Some(Data(payload)),
+                    };
+
+                    salf.eth_call(transaction)
+                })
+                .and_then(|bytes| Ok(Uint256::from_bytes_be(&bytes))),
+        )
+    }
+
+    /// Checks if an event has already happened.
+    pub fn check_for_event(
+        &self,
+        contract_address: Address,
+        event: &str,
+        topic1: Option<Vec<[u8; 32]>>,
+        topic2: Option<Vec<[u8; 32]>>,
+    ) -> Box<Future<Item = Option<Log>, Error = Error>> {
+        let salf = self.clone();
+
+        // Build a filter with specified topics
+        let mut new_filter = NewFilter::default();
+        new_filter.address = vec![contract_address.clone()];
+        new_filter.topics = Some(vec![
+            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
+            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+        ]);
+
+        Box::new(salf.eth_get_logs(new_filter).and_then(|logs| {
+            // Assuming the latest log is at the head of the vec
+            Ok(logs.first().map(|log| log.clone()))
+        }))
+    }
+
+    /// Sets up an event filter, waits for the event to happen, then removes the filter
+    pub fn wait_for_event(
+        &self,
+        contract_address: Address,
+        event: &str,
+        topic1: Option<Vec<[u8; 32]>>,
+        topic2: Option<Vec<[u8; 32]>>,
+    ) -> Box<Future<Item = Log, Error = Error>> {
+        let salf = self.clone();
+        salf.get_event(contract_address, event, topic1, topic2, None, None)
+    }
+
+    fn get_event(
+        &self,
+        contract_address: Address,
+        event: &str,
+        topic1: Option<Vec<[u8; 32]>>,
+        topic2: Option<Vec<[u8; 32]>>,
+        from_block: Option<String>,
+        to_block: Option<String>,
+    ) -> Box<Future<Item = Log, Error = Error>> {
+        let salf = self.clone();
+        // Build a filter with specified topics
+        let mut new_filter = NewFilter::default();
+        new_filter.address = vec![contract_address.clone()];
+        new_filter.from_block = from_block;
+        new_filter.to_block = to_block;
+        new_filter.topics = Some(vec![
+            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
+            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+        ]);
+
+        Box::new(
+            salf.eth_new_filter(new_filter)
+                .and_then(move |filter_id| {
+                    salf.eth_get_filter_changes(filter_id.clone())
+                        .into_future()
+                        .map(move |(head, _tail)| (filter_id, head))
+                        .map_err(|(e, _)| e)
+                        .and_then(move |(filter_id, head)| {
+                            salf.eth_uninstall_filter(filter_id).and_then(move |r| {
+                                ensure!(r, "Unable to properly uninstall filter");
+                                Ok(head)
+                            })
+                        })
+                })
+                .map(move |maybe_log| maybe_log.expect("Expected log data but None found"))
+                .from_err()
                 .into_future(),
         )
     }
