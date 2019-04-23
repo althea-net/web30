@@ -5,7 +5,7 @@
 //! JSONRPC requests.
 //!
 use crate::jsonrpc::client::{Client, HTTPClient};
-use crate::types::{Log, NewFilter, TransactionRequest, TransactionResponse};
+use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
 use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
@@ -131,6 +131,15 @@ impl Web3 {
         self.jsonrpc_client
             .request_method("eth_blockNumber", Vec::<String>::new())
     }
+
+    pub fn eth_get_block_by_number(
+        &self,
+        block_number: Uint256,
+    ) -> Box<Future<Item = Block, Error = Error>> {
+        self.jsonrpc_client
+            .request_method("eth_getBlockByNumber", block_number)
+    }
+
     pub fn eth_send_raw_transaction(
         &self,
         data: Vec<u8>,

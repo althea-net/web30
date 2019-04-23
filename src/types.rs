@@ -152,6 +152,27 @@ pub struct TransactionRequest {
     pub nonce: Option<Uint256>,
 }
 
+#[derive(Serialize, Debug, Deserialize)]
+pub struct Block {
+    pub number: Option<Uint256>,
+    pub hash: [u8; 32],
+    pub parent_hash: [u8; 32],
+    pub nonce: u8,
+    pub sha3_uncles: u8,
+    pub logs_bloom: [u8; 32],
+    pub transactions_root: [u8; 32],
+    pub miner: Address,
+    pub difficulty: Uint256,
+    pub total_difficulty: Uint256,
+    pub extra_data: Data,
+    pub size: Uint256,
+    pub gas_limit: Uint256,
+    pub gas_used: Uint256,
+    pub timestamp: Uint256,
+    pub transactions: Vec<[u8; 32]>,
+    pub uncles: Vec<[u8; 32]>,
+}
+
 #[test]
 fn decode_log() {
     let _res: Vec<Log> = serde_json::from_str(r#"[
