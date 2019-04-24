@@ -268,6 +268,23 @@ impl Web3 {
         }))
     }
 
+    /// Waits for a transaction with the given hash to show up on the chain
+    pub fn wait_for_transaction(
+        &self,
+        tx_hash: [u8; 32],
+    ) -> Box<Future<Item = TransactionResponse, Error = Error>> {
+        let salf = self.clone();
+        let mut ret: TransactionResponse;
+        Box::new(
+            // Every 1 second
+            Interval::new(Duration::from_secs(1))
+                .map(move |_| salf.eth_get_transaction_by_hash(tx_hash.into()))
+                .skip_while(move |maybe_tx| futures::future::ok(maybe_tx.is_none()))
+                .take(1)
+                .into_future(),
+        )
+    }
+
     /// Sets up an event filter, waits for the event to happen, then removes the filter
     pub fn wait_for_event(
         &self,
