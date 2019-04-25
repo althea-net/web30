@@ -274,15 +274,15 @@ impl Web3 {
         tx_hash: [u8; 32],
     ) -> Box<Future<Item = TransactionResponse, Error = Error>> {
         let salf = self.clone();
-        let mut ret: TransactionResponse;
-        Box::new(
-            // Every 1 second
-            Interval::new(Duration::from_secs(1))
-                .map(move |_| salf.eth_get_transaction_by_hash(tx_hash.into()))
-                .skip_while(move |maybe_tx| futures::future::ok(maybe_tx.is_none()))
-                .take(1)
-                .into_future(),
-        )
+        let fut = Interval::new(Duration::from_secs(1))
+            .from_err()
+            .and_then(move |_| salf.eth_get_transaction_by_hash(tx_hash.into()))
+            .filter_map(move |maybe_tx| maybe_tx)
+            .into_future()
+            .map(|(v, _stream)| v.unwrap())
+            .map_err(|(e, _stream)| e);
+
+        Box::new(fut)
     }
 
     /// Sets up an event filter, waits for the event to happen, then removes the filter
