@@ -53,36 +53,22 @@ impl Web3 {
         self.jsonrpc_client
             .request_method("eth_newFilter", vec![new_filter])
     }
-    pub fn eth_uninstall_filter(&self, filter: Uint256) -> Box<Future<Item = bool, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_uninstallFilter",
-            vec![format!("{:#x}", filter.clone())],
-        )
-    }
     pub fn eth_get_filter_changes(
         &self,
-        filter: Uint256,
-    ) -> Box<Stream<Item = Log, Error = Error>> {
-        let jsonrpc_client = self.jsonrpc_client.clone();
-        Box::new(
-            // Every 1 second
-            Interval::new(Duration::from_secs(1))
-                .map(move |()| {
-                    jsonrpc_client
-                        .clone()
-                        // Call eth_getFilterChanges every second
-                        .request_method(
-                            "eth_getFilterChanges",
-                            vec![format!("{:#x}", filter.clone())],
-                        )
-                        // Convert list of logs into a Future of Stream
-                        .map(move |logs: Vec<Log>| stream::iter_ok(logs.into_iter()))
-                        .into_future()
-                        // Flatten future of stream into a stream therefore extracting nested stream of logs
-                        .flatten_stream()
-                })
-                // Flatten stream of streams into a single stream
-                .flatten(),
+        filter_id: Uint256,
+    ) -> Box<Future<Item = Vec<Log>, Error = Error>> {
+        self.jsonrpc_client.request_method(
+            "eth_getFilterChanges",
+            vec![format!("{:#x}", filter_id.clone())],
+        )
+    }
+    pub fn eth_uninstall_filter(
+        &self,
+        filter_id: Uint256,
+    ) -> Box<Future<Item = bool, Error = Error>> {
+        self.jsonrpc_client.request_method(
+            "eth_uninstallFilter",
+            vec![format!("{:#x}", filter_id.clone())],
         )
     }
 
@@ -285,56 +271,56 @@ impl Web3 {
         Box::new(fut)
     }
 
-    /// Sets up an event filter, waits for the event to happen, then removes the filter
-    pub fn wait_for_event(
+    /// Sets up an event filter, waits for the event to happen, then removes the filter. Includes a
+    /// local filter. If a captured event does not pass this filter, it is ignored.
+    pub fn wait_for_event<F: Fn(Log) -> bool + 'static>(
         &self,
         contract_address: Address,
         event: &str,
         topic1: Option<Vec<[u8; 32]>>,
         topic2: Option<Vec<[u8; 32]>>,
+        topic3: Option<Vec<[u8; 32]>>,
+        local_filter: F,
     ) -> Box<Future<Item = Log, Error = Error>> {
         let salf = self.clone();
-        salf.get_event(contract_address, event, topic1, topic2, None, None)
-    }
 
-    fn get_event(
-        &self,
-        contract_address: Address,
-        event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-        from_block: Option<String>,
-        to_block: Option<String>,
-    ) -> Box<Future<Item = Log, Error = Error>> {
-        let salf = self.clone();
-        // Build a filter with specified topics
         let mut new_filter = NewFilter::default();
         new_filter.address = vec![contract_address.clone()];
-        new_filter.from_block = from_block;
-        new_filter.to_block = to_block;
+        new_filter.from_block = None;
+        new_filter.to_block = None;
         new_filter.topics = Some(vec![
             Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
             topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
             topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+            topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
         ]);
 
-        Box::new(
-            salf.eth_new_filter(new_filter)
-                .and_then(move |filter_id| {
-                    salf.eth_get_filter_changes(filter_id.clone())
-                        .into_future()
-                        .map(move |(head, _tail)| (filter_id, head))
-                        .map_err(|(e, _)| e)
-                        .and_then(move |(filter_id, head)| {
-                            salf.eth_uninstall_filter(filter_id).and_then(move |r| {
-                                ensure!(r, "Unable to properly uninstall filter");
-                                Ok(head)
-                            })
-                        })
-                })
-                .map(move |maybe_log| maybe_log.expect("Expected log data but None found"))
+        Box::new(salf.eth_new_filter(new_filter).and_then(move |filter_id| {
+            Interval::new(Duration::from_secs(2))
                 .from_err()
-                .into_future(),
-        )
+                .and_then({
+                    let filter_id = filter_id.clone();
+                    let salf = salf.clone();
+                    move |_| salf.eth_get_filter_changes(filter_id.clone())
+                })
+                .filter_map(move |logs: Vec<Log>| {
+                    for log in logs {
+                        if local_filter(log.clone()) {
+                            return Some(log);
+                        }
+                    }
+
+                    None
+                })
+                .into_future()
+                .map(|(v, _stream)| v.unwrap())
+                .map_err(|(e, _stream)| e)
+                .and_then(move |log| {
+                    salf.eth_uninstall_filter(filter_id).and_then(move |r| {
+                        ensure!(r, "Unable to properly uninstall filter");
+                        Ok(log)
+                    })
+                })
+        }))
     }
 }
