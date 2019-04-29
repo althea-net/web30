@@ -41,26 +41,22 @@ pub struct Log {
     pub transaction_index: Option<Uint256>,
     /// hash of the transactions this log was created from. null when its pending log.
     #[serde(rename = "transactionHash")]
-    pub transaction_hash: Option<String>,
+    pub transaction_hash: Option<Data>,
     /// hash of the block where this log was in. null when its pending. null when its pending log.
     #[serde(rename = "blockHash")]
-    pub block_hash: Option<String>,
+    pub block_hash: Option<Data>,
     /// the block number where this log was in. null when its pending. null when its pending log.
     #[serde(rename = "blockNumber")]
     pub block_number: Option<Uint256>,
     /// 20 Bytes - address from which this log originated.
     pub address: Address,
     /// contains the non-indexed arguments of the log.
-    #[serde(
-        serialize_with = "data_serialize",
-        deserialize_with = "data_deserialize"
-    )]
-    pub data: Vec<u8>, //
+    pub data: Data,
     /// Array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity:
     /// The first topic is the hash of the signature of the
     /// event (e.g. Deposit(address,bytes32,uint256)), except you declared
     /// the event with the anonymous specifier.)
-    pub topics: Vec<String>,
+    pub topics: Vec<Data>,
     #[serde(rename = "type")]
     pub type_: Option<String>,
 }
@@ -175,15 +171,26 @@ pub struct Block {
 
 #[test]
 fn decode_log() {
-    let _res: Vec<Log> = serde_json::from_str(r#"[
-        {"logIndex":"0x0",
-        "transactionIndex":"0x0",
-        "transactionHash":"0xd6785de92c3d55e22a50ef6a37553b1abd4fc710d3662e38369656d4e747662b",
-        "blockHash":"0x5d1c0bf2d5d32754f3f9501c9d299beb12447ea2a024e0cb67628979eb6dbf36",
-        "blockNumber":"0x53","address":"0xc153bde3ab8a9721b6252dcd1ffa2cb0aa165c1a",
-        "data":"0xfd13bb0c43a8e298ee038c1c64d7a93e9653dcab2ff741005d6613ba28f31bd4",
-        "topics":["0xa79f57c989b24a51391abba00096b6d17aac193697cbc283ee2ec6570abd3111","0x000000000000000000000000b3b2b9fbf1e8cc9713dbde822eba95fbc4a9f698","0x000000000000000000000000e817f611a758ca765b09b60e2dbcceedaaa5e90c"],
-        "type":"mined"}]"#).unwrap();
+    let res: Vec<Log> = serde_json::from_str(
+        r#"[{
+      "address": "0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359",
+      "blockHash": "0xd8fb35a10b60e5fd1848a83d052424954e4a400fc7826bf85a743ff55acf73d3",
+      "blockNumber": "0x74de5d",
+      "data": "0x00000000000000000000000000000000000000000000000dae06677922ff8290",
+      "logIndex": "0x14",
+      "removed": false,
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x000000000000000000000000802275979b020f0ec871c5ec1db6e412b72ff20b",
+        "0x000000000000000000000000af38668f4719ecf9452dc0300be3f6c83cbf3721"
+      ],
+      "transactionHash": "0xceb484eb92fd7ad626bc5aced6d669a693baf3d776b515a08d65fafca633a6a6",
+      "transactionIndex": "0xc"
+    }]"#,
+    )
+    .unwrap();
+
+    println!("{:#?}", res);
 }
 
 #[test]
