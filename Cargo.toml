@@ -1,6 +1,6 @@
 [package]
 name = "web30"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Michal Papierski", "Jehan Tremback"]
 description = "10x better than web3"
 license = "Apache-2.0"
