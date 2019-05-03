@@ -10,14 +10,12 @@ use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use failure::Error;
-use futures::stream;
-use futures::IntoFuture;
-use futures::{Future, Stream};
+use futures::{Future, IntoFuture, Stream};
 use futures_timer::Interval;
 use num256::Uint256;
 use std::sync::Arc;
 use std::time::Duration;
-use types::Data;
+use types::{Data, UnpaddedHex};
 
 fn bytes_to_data(s: &[u8]) -> String {
     let mut foo = "0x".to_string();
@@ -218,10 +216,10 @@ impl Web3 {
                     let transaction = TransactionRequest {
                         from: own_address,
                         to: Some(contract_address),
-                        nonce: Some(nonce),
+                        nonce: Some(UnpaddedHex(nonce)),
                         gas: None,
-                        gas_price: gas_price.into(),
-                        value: Some(0u64.into()),
+                        gas_price: Some(UnpaddedHex(gas_price)),
+                        value: Some(UnpaddedHex(0u64.into())),
                         data: Some(Data(payload)),
                     };
 

@@ -2,9 +2,12 @@ use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
 use actix_web::client;
 use actix_web::HttpMessage;
+use bytes::Bytes;
 use failure::Error;
 use futures::future::Future;
 use serde::{Deserialize, Serialize};
+use serde_json;
+use serde_json::ser::to_string;
 use std::cell::RefCell;
 use std::str;
 use std::sync::{Arc, Mutex};
@@ -18,7 +21,7 @@ pub trait Client {
     ) -> Box<Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
-        T: std::fmt::Debug,
+        // T: std::fmt::Debug,
         R: std::fmt::Debug;
 }
 
@@ -52,11 +55,11 @@ impl Client for HTTPClient {
     ) -> Box<Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
-        T: std::fmt::Debug,
+        // T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);
-        trace!("web3 request {:?}", payload);
+        println!("web3 request {:?}", to_string(&payload));
         Box::new(
             client::post(&self.url)
                 .json(payload)
@@ -65,16 +68,16 @@ impl Client for HTTPClient {
                 .timeout(Duration::from_millis(1000))
                 .from_err()
                 .and_then(|response| {
-                    response
-                        .json()
-                        .from_err()
-                        .and_then(move |res: Response<R>| {
-                            trace!("got web3 response {:#?}", res);
-                            let data = res.data.into_result();
-                            data.map_err(move |e| {
-                                format_err!("JSONRPC Error {}: {}", e.code, e.message)
-                            })
+                    response.body().from_err().and_then(move |b: Bytes| {
+                        println!("\n\n\nGot response {:?}", b);
+                        let res: Response<R> = serde_json::de::from_slice(&*b).unwrap();
+                        //Response<R>
+                        trace!("got web3 response {:#?}", res);
+                        let data = res.data.into_result();
+                        data.map_err(move |e| {
+                            format_err!("JSONRPC Error {}: {}", e.code, e.message)
                         })
+                    })
                 }),
         )
     }
