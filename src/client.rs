@@ -109,7 +109,7 @@ impl Web3 {
         transaction: TransactionRequest,
     ) -> Box<Future<Item = Data, Error = Error>> {
         self.jsonrpc_client
-            .request_method("eth_call", vec![transaction])
+            .request_method("eth_call", (transaction, "latest"))
     }
     pub fn eth_block_number(&self) -> Box<Future<Item = Uint256, Error = Error>> {
         self.jsonrpc_client
