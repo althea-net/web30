@@ -18,3 +18,5 @@ actix-web = {version = "0.7",  default-features = false, features=["ssl"]}
 tokio = "0.1"
 actix = "0.7"
 log = "0.4"
+bytes = "0.4.12"
+assert-json-diff = "1.0.0"

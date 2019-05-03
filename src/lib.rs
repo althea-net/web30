@@ -12,6 +12,9 @@ extern crate futures_timer;
 extern crate tokio;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate assert_json_diff;
+extern crate bytes;
 
 pub mod client;
 pub mod jsonrpc;

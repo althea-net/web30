@@ -122,8 +122,10 @@ impl Web3 {
         &self,
         block_number: Uint256,
     ) -> Box<Future<Item = Block, Error = Error>> {
-        self.jsonrpc_client
-            .request_method("eth_getBlockByNumber", block_number)
+        self.jsonrpc_client.request_method(
+            "eth_getBlockByNumber",
+            (format!("{:#x}", block_number), false),
+        )
     }
 
     pub fn eth_send_raw_transaction(

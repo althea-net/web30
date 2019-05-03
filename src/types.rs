@@ -4,6 +4,7 @@ use num256::Uint256;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serializer;
+use serde_json::Value;
 use std::ops::Deref;
 
 /// Serializes slice of data as "UNFORMATTED DATA" format required
@@ -148,25 +149,44 @@ pub struct TransactionRequest {
     pub nonce: Option<Uint256>,
 }
 
+
+// {
+//   "jsonrpc": "2.0",
+//   "id": 2,
+//   "result": {
+//     "difficulty": "0x6c32fa8089ec4",
+//     "extraData": "0x5050594520737061726b706f6f6c2d6574682d636e2d687a",
+//     "gasLimit": "0x7a121d",
+//     "gasUsed": "0x41e026",
+//     "hash": "0x1539b836d40adc72e3cc3d6b2aabe55c4347c7bfb68e09020ea6ebd95a65b434",
+//     "logsBloom": "0x0000080000002010010000090021002160110040401020820048403000040000882000001010440800020108010000000300000000820070028408000050000180016480b003804184000208411100500800080002080204a00002100100003801090001060002020008a00000020800204040820010329041000011000000880912021100000044004000000025840800190a0000001000264880080100240000808000100092000004500001008404088000010011200080102000200000e0100c1102000000000000000800040004000c800001001004b1022000804070010800208201451000200c208c000080c0202021410040d0020008000016000004",
+//     "miner": "0x5a0b54d5dc17e0aadc383d2db43b0a0d3e029c4c",
+//     "mixHash": "0x2d8faa3690ec380b8c4ce5ffd6df444b8e532ddceb87a69890482af1137289e6",
+//     "nonce": "0xa2d323400067995d",
+//     "number": "0x753ddd",
+//     "parentHash": "0xa68a4b2c0e47201aef3729055a0c01a74fa0ecf59ddde6cc0111d897442dd830",
+//     "receiptsRoot": "0x3b536e11afd70f5b893619f2aa1401c1388579a63dabd149172b2b50e63d2c2a",
+//     "sha3Uncles": "0x7338c4e69477e51b91b693a7241903033331b693750e92b619139b1468d68eb4",
+//     "size": "0x14a8",
+//     "stateRoot": "0x3b39c0bd303e9c135c6648890175b697a274f7ad3a25d3b6804d6744ae7dc226",
+//     "timestamp": "0x5ccb4648",
+//     "totalDifficulty": "0x220b1c200879e319650",
+//     "transactions": [
+//       "0xb474e6dd57954812bf2e8dd9f02c03f2e93623097a7f375bdc26d31ce4b09af7",
+
+//     ],
+//     "transactionsRoot": "0x8a42d36e3b8cd391879a2c26c9649a0e55425799e071abc2211161442ed249be",
+//     "uncles": [
+//       "0x0ee490b22ceeffa818df767b5c5e9db0ea11620a7c948de008a52cb9df1b3725"
+//     ]
+//   }
+// }
+
+/// This struct currently only has the 'timestamp' field. You can add the others using the example
+/// JSON pasted above this comment in the source code.
 #[derive(Serialize, Debug, Deserialize)]
 pub struct Block {
-    pub number: Option<Uint256>,
-    pub hash: [u8; 32],
-    pub parent_hash: [u8; 32],
-    pub nonce: u8,
-    pub sha3_uncles: u8,
-    pub logs_bloom: [u8; 32],
-    pub transactions_root: [u8; 32],
-    pub miner: Address,
-    pub difficulty: Uint256,
-    pub total_difficulty: Uint256,
-    pub extra_data: Data,
-    pub size: Uint256,
-    pub gas_limit: Uint256,
-    pub gas_used: Uint256,
     pub timestamp: Uint256,
-    pub transactions: Vec<[u8; 32]>,
-    pub uncles: Vec<[u8; 32]>,
 }
 
 #[test]
@@ -194,24 +214,43 @@ fn decode_log() {
 }
 
 #[test]
-fn decode_transaction_response() {
-    let _res: TransactionResponse = serde_json::from_str(
-        r#"{
-    "blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2",
-    "blockNumber":"0x5daf3b",
-    "from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d",
-    "gas":"0xc350",
-    "gasPrice":"0x4a817c800",
-    "hash":"0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b",
-    "input":"0x68656c6c6f21",
-    "nonce":"0x15",
-    "to":"0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb",
-    "transactionIndex":"0x41",
-    "value":"0xf3dbb76162000",
-    "v":"0x25",
-    "r":"0x1b5e176d927f8e9ab405058b2d2457392da3e20f328b16ddabcebc33eaac5fea",
-    "s":"0x4ba69724e8f69de52f0125ad8b3c5c2cef33019bac3249e2c0a2192766d1721c"
-  }"#,
-    )
-    .unwrap();
+fn decode_block() {
+    let original = r#"{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "difficulty": "0x6c32fa8089ec4",
+    "extraData": "0x5050594520737061726b706f6f6c2d6574682d636e2d687a",
+    "gasLimit": "0x7a121d",
+    "gasUsed": "0x41e026",
+    "hash": "0x1539b836d40adc72e3cc3d6b2aabe55c4347c7bfb68e09020ea6ebd95a65b434",
+    "logsBloom": "0x0000080000002010010000090021002160110040401020820048403000040000882000001010440800020108010000000300000000820070028408000050000180016480b003804184000208411100500800080002080204a00002100100003801090001060002020008a00000020800204040820010329041000011000000880912021100000044004000000025840800190a0000001000264880080100240000808000100092000004500001008404088000010011200080102000200000e0100c1102000000000000000800040004000c800001001004b1022000804070010800208201451000200c208c000080c0202021410040d0020008000016000004",
+    "miner": "0x5a0b54d5dc17e0aadc383d2db43b0a0d3e029c4c",
+    "mixHash": "0x2d8faa3690ec380b8c4ce5ffd6df444b8e532ddceb87a69890482af1137289e6",
+    "nonce": "0xa2d323400067995d",
+    "number": "0x753ddd",
+    "parentHash": "0xa68a4b2c0e47201aef3729055a0c01a74fa0ecf59ddde6cc0111d897442dd830",
+    "receiptsRoot": "0x3b536e11afd70f5b893619f2aa1401c1388579a63dabd149172b2b50e63d2c2a",
+    "sha3Uncles": "0x7338c4e69477e51b91b693a7241903033331b693750e92b619139b1468d68eb4",
+    "size": "0x14a8",
+    "stateRoot": "0x3b39c0bd303e9c135c6648890175b697a274f7ad3a25d3b6804d6744ae7dc226",
+    "timestamp": "0x5ccb4648",
+    "totalDifficulty": "0x220b1c200879e319650",
+    "transactions": [
+      "0xb474e6dd57954812bf2e8dd9f02c03f2e93623097a7f375bdc26d31ce4b09af7"
+    ],
+    "transactionsRoot": "0x8a42d36e3b8cd391879a2c26c9649a0e55425799e071abc2211161442ed249be",
+    "uncles": [
+      "0x0ee490b22ceeffa818df767b5c5e9db0ea11620a7c948de008a52cb9df1b3725"
+    ]
+  }
+}"#;
+
+    let value_from_string: Value = serde_json::from_str(original).unwrap();
+
+    let decoded: TransactionResponse = serde_json::from_str(original).unwrap();
+
+    let value_from_struct: Value = serde_json::to_value(&decoded).unwrap();
+
+    assert_json_include!(actual: value_from_string, expected: value_from_struct);
 }
