@@ -115,7 +115,7 @@ pub struct TransactionResponse {
   pub s: Uint256,
 }
 
-#[derive(Serialize, Default, Debug)]
+#[derive(Serialize, Default, Debug, Clone)]
 pub struct NewFilter {
   #[serde(rename = "fromBlock", skip_serializing_if = "Option::is_none")]
   pub from_block: Option<String>,

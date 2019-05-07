@@ -201,7 +201,7 @@ impl Web3 {
         sig: &str,
         tokens: &[Token],
         own_address: Address,
-    ) -> Box<Future<Item = Uint256, Error = Error>> {
+    ) -> Box<Future<Item = Vec<u8>, Error = Error>> {
         let salf = self.clone();
 
         let props = salf
@@ -225,7 +225,10 @@ impl Web3 {
 
                     salf.eth_call(transaction)
                 })
-                .and_then(|bytes| Ok(Uint256::from_bytes_be(&bytes))),
+                .and_then(|bytes| {
+                    let bytes = bytes.clone();
+                    Ok(bytes.0)
+                }),
         )
     }
 
@@ -269,6 +272,59 @@ impl Web3 {
             .map_err(|(e, _stream)| e);
 
         Box::new(fut)
+    }
+
+    /// Same as wait_for_event, but doesn't use eth_newFilter
+    pub fn wait_for_event_alt<F: Fn(Log) -> bool + 'static>(
+        &self,
+        contract_address: Address,
+        event: &str,
+        topic1: Option<Vec<[u8; 32]>>,
+        topic2: Option<Vec<[u8; 32]>>,
+        topic3: Option<Vec<[u8; 32]>>,
+        local_filter: F,
+    ) -> Box<Future<Item = Log, Error = Error>> {
+        let salf = self.clone();
+
+        let new_filter = NewFilter {
+            address: vec![contract_address.clone()],
+            from_block: None,
+            to_block: None,
+            topics: Some(vec![
+                Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
+                topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+                topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+                topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
+            ]),
+        };
+
+        Box::new(
+            //salf.eth_new_filter(new_filter).and_then(move |filter_id| {
+            Interval::new(Duration::from_secs(2))
+                .from_err()
+                .and_then({
+                    let salf = salf.clone();
+                    move |_| salf.eth_get_logs(new_filter.clone())
+                })
+                .filter_map(move |logs: Vec<Log>| {
+                    for log in logs {
+                        if local_filter(log.clone()) {
+                            return Some(log);
+                        }
+                    }
+
+                    None
+                })
+                .into_future()
+                .map(|(v, _stream)| v.unwrap())
+                .map_err(|(e, _stream)| e), // .and_then(move |log| {
+                                            //     salf.eth_uninstall_filter(filter_id).and_then(move |r| {
+                                            //         ensure!(r, "Unable to properly uninstall filter");
+                                            //         Ok(log)
+                                            //     })
+                                            // })
+                                            //})
+        )
     }
 
     /// Sets up an event filter, waits for the event to happen, then removes the filter. Includes a
