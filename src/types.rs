@@ -76,6 +76,12 @@ impl Deref for Data {
   }
 }
 
+impl From<Vec<u8>> for Data {
+  fn from(v: Vec<u8>) -> Self {
+    Data(v)
+  }
+}
+
 /// As received by getTransactionByHash
 ///
 /// See more: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_gettransactionbyhash
@@ -129,21 +135,25 @@ pub struct NewFilter {
 #[derive(Serialize)]
 pub struct TransactionRequest {
   //The address the transaction is send from.
-  pub from: Address,
-  // The address the transaction is directed to.
   #[serde(skip_serializing_if = "Option::is_none")]
-  pub to: Option<Address>,
+  pub from: Option<Address>,
+  // The address the transaction is directed to.
+  pub to: Address,
   // Integer of the gas provided for the transaction execution. It will return unused gas.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub gas: Option<UnpaddedHex>,
   // Integer of the gasPrice used for each paid gas
   #[serde(rename = "gasPrice")]
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub gas_price: Option<UnpaddedHex>,
   // Integer of the value sent with this transaction
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub value: Option<UnpaddedHex>,
   // The compiled code of a contract OR the hash of the invoked method signature and encoded parameters. For details see Ethereum Contract ABI
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub data: Option<Data>,
   //  This allows to overwrite your own pending transactions that use the same nonce.
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub nonce: Option<UnpaddedHex>,
 }
 
@@ -155,6 +165,12 @@ impl Serialize for UnpaddedHex {
     S: Serializer,
   {
     serializer.serialize_str(&format!("{:#x}", *self.0))
+  }
+}
+
+impl From<Uint256> for UnpaddedHex {
+  fn from(v: Uint256) -> Self {
+    UnpaddedHex(v)
   }
 }
 

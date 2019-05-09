@@ -91,6 +91,13 @@ impl Web3 {
         self.jsonrpc_client
             .request_method("eth_gasPrice", Vec::<String>::new())
     }
+    pub fn eth_estimate_gas(
+        &self,
+        transaction: TransactionRequest,
+    ) -> Box<Future<Item = Uint256, Error = Error>> {
+        self.jsonrpc_client
+            .request_method("eth_estimateGas", vec![transaction])
+    }
     pub fn eth_get_balance(&self, address: Address) -> Box<Future<Item = Uint256, Error = Error>> {
         self.jsonrpc_client.request_method(
             "eth_getBalance",
@@ -165,18 +172,30 @@ impl Web3 {
         secret: PrivateKey,
     ) -> Box<Future<Item = Uint256, Error = Error>> {
         let salf = self.clone();
-        let props = self
-            .eth_gas_price()
-            .join(self.eth_get_transaction_count(own_address));
+        let transaction = TransactionRequest {
+            from: None,
+            to: to_address,
+            nonce: None,     //nonce,
+            gas_price: None, //gas_price.into(),
+            gas: None,
+
+            value: Some(value.clone().into()),
+            data: Some(data.clone().into()),
+        };
+        let props = self.eth_gas_price().join3(
+            self.eth_get_transaction_count(own_address),
+            self.eth_estimate_gas(transaction),
+        );
 
         Box::new(
             props
-                .and_then(move |(gas_price, nonce)| {
+                .and_then(move |(gas_price, nonce, gas_limit)| {
+                    println!("GAS PRCIE: {:?}, GAS LIMIT: {:?}", gas_price, gas_limit);
                     let transaction = Transaction {
                         to: to_address,
                         nonce: nonce,
                         gas_price: gas_price.into(),
-                        gas_limit: 6721975u32.into(),
+                        gas_limit: gas_limit.into(), //6721975u32.into(),
                         value,
                         data,
                         signature: None,
@@ -214,8 +233,8 @@ impl Web3 {
             props
                 .and_then(move |(gas_price, nonce)| {
                     let transaction = TransactionRequest {
-                        from: own_address,
-                        to: Some(contract_address),
+                        from: Some(own_address),
+                        to: contract_address,
                         nonce: Some(UnpaddedHex(nonce)),
                         gas: None,
                         gas_price: Some(UnpaddedHex(gas_price)),
