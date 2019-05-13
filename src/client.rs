@@ -84,7 +84,7 @@ impl Web3 {
     ) -> Box<Future<Item = Uint256, Error = Error>> {
         self.jsonrpc_client.request_method(
             "eth_getTransactionCount",
-            vec![address.to_string(), "latest".to_string()],
+            vec![address.to_string(), "pending".to_string()],
         )
     }
     pub fn eth_gas_price(&self) -> Box<Future<Item = Uint256, Error = Error>> {
@@ -163,6 +163,7 @@ impl Web3 {
     }
 
     /// Sends a transaction which changes blockchain state.
+    /// If gas_price is None, the gas price will be estimated with eth_gasPrice
     pub fn send_transaction(
         &self,
         to_address: Address,
@@ -170,6 +171,7 @@ impl Web3 {
         value: Uint256,
         own_address: Address,
         secret: PrivateKey,
+        gas_price: Option<Uint256>,
     ) -> Box<Future<Item = Uint256, Error = Error>> {
         let salf = self.clone();
         let transaction = TransactionRequest {
@@ -182,15 +184,26 @@ impl Web3 {
             value: Some(value.clone().into()),
             data: Some(data.clone().into()),
         };
-        let props = self.eth_gas_price().join3(
-            self.eth_get_transaction_count(own_address),
-            self.eth_estimate_gas(transaction),
-        );
+
+        let props = if let Some(gp) = gas_price {
+            Box::new(futures::future::ok(gp).join3(
+                self.eth_get_transaction_count(own_address),
+                self.eth_estimate_gas(transaction),
+            )) as Box<Future<Item = (Uint256, Uint256, Uint256), Error = Error>>
+        } else {
+            Box::new(self.eth_gas_price().join3(
+                self.eth_get_transaction_count(own_address),
+                self.eth_estimate_gas(transaction),
+            ))
+        };
 
         Box::new(
             props
                 .and_then(move |(gas_price, nonce, gas_limit)| {
-                    println!("GAS PRCIE: {:?}, GAS LIMIT: {:?}", gas_price, gas_limit);
+                    println!(
+                        "GAS PRCIE: {:?}, GAS LIMIT: {:?}, NOOONCE: {:?}",
+                        gas_price, gas_limit, nonce
+                    );
                     let transaction = Transaction {
                         to: to_address,
                         nonce: nonce,
@@ -318,7 +331,6 @@ impl Web3 {
         };
 
         Box::new(
-            //salf.eth_new_filter(new_filter).and_then(move |filter_id| {
             Interval::new(Duration::from_secs(2))
                 .from_err()
                 .and_then({
@@ -336,13 +348,7 @@ impl Web3 {
                 })
                 .into_future()
                 .map(|(v, _stream)| v.unwrap())
-                .map_err(|(e, _stream)| e), // .and_then(move |log| {
-                                            //     salf.eth_uninstall_filter(filter_id).and_then(move |r| {
-                                            //         ensure!(r, "Unable to properly uninstall filter");
-                                            //         Ok(log)
-                                            //     })
-                                            // })
-                                            //})
+                .map_err(|(e, _stream)| e),
         )
     }
 

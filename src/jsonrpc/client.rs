@@ -1,7 +1,7 @@
 use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
-use actix_web::client;
-use actix_web::HttpMessage;
+use actix_web::http::header;
+use actix_web::{client, HttpMessage};
 use bytes::Bytes;
 use failure::Error;
 use futures::future::Future;
@@ -59,9 +59,10 @@ impl Client for HTTPClient {
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);
-        println!("web3 request {:?}", to_string(&payload));
+        println!("\nweb3 request {:?}", to_string(&payload));
         Box::new(
             client::post(&self.url)
+                .header(header::CONTENT_TYPE, "application/json")
                 .json(payload)
                 .expect("json error")
                 .send()
@@ -69,7 +70,7 @@ impl Client for HTTPClient {
                 .from_err()
                 .and_then(|response| {
                     response.body().from_err().and_then(move |b: Bytes| {
-                        println!("\n\n\nGot response {:?}", b);
+                        println!("\nGot response {:?}", b);
                         let res: Response<R> = serde_json::de::from_slice(&*b).unwrap();
                         //Response<R>
                         trace!("got web3 response {:#?}", res);
