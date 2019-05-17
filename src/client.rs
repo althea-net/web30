@@ -133,6 +133,11 @@ impl Web3 {
         )
     }
 
+    pub fn eth_get_latest_block(&self) -> Box<Future<Item = Block, Error = Error>> {
+        self.jsonrpc_client
+            .request_method("eth_getBlockByNumber", ("latest", false))
+    }
+
     pub fn eth_send_raw_transaction(
         &self,
         data: Vec<u8>,
@@ -164,6 +169,7 @@ impl Web3 {
 
     /// Sends a transaction which changes blockchain state.
     /// If gas_price is None, the gas price will be estimated with eth_gasPrice
+    /// If network_id is None, the network id will be set to 1, for the Eth mainnet.
     pub fn send_transaction(
         &self,
         to_address: Address,
@@ -172,6 +178,7 @@ impl Web3 {
         own_address: Address,
         secret: PrivateKey,
         gas_price: Option<Uint256>,
+        network_id: Option<u64>,
     ) -> Box<Future<Item = Uint256, Error = Error>> {
         let salf = self.clone();
         let transaction = TransactionRequest {
@@ -214,7 +221,9 @@ impl Web3 {
                         signature: None,
                     };
 
-                    let transaction = transaction.sign(&secret, Some(1u64));
+                    let network_id = if let Some(id) = network_id { id } else { 1u64 };
+
+                    let transaction = transaction.sign(&secret, Some(network_id));
 
                     salf.eth_send_raw_transaction(
                         transaction
