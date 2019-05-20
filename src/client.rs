@@ -29,23 +29,11 @@ pub struct Web3 {
     jsonrpc_client: Arc<Box<HTTPClient>>,
 }
 
-#[derive(Clone)]
-pub struct SendTxOptions {
-    pub gas_price: Option<Uint256>,
-    pub gas_price_multiplier: Option<Uint256>,
-    pub gas_limit: Option<Uint256>,
-    pub network_id: u64,
-}
-
-impl Default for SendTxOptions {
-    fn default() -> Self {
-        Self {
-            gas_price: None,
-            gas_limit: None,
-            gas_price_multiplier: None,
-            network_id: 1u64,
-        }
-    }
+pub enum SendTxOption {
+    GasPrice(Uint256),
+    GasPriceMultiplier(Uint256),
+    GasLimit(Uint256),
+    NetworkId(u64),
 }
 
 impl Web3 {
@@ -187,8 +175,7 @@ impl Web3 {
     }
 
     /// Sends a transaction which changes blockchain state.
-    /// If gas_price is None, the gas price will be estimated with eth_gasPrice
-    /// If network_id is None, the network id will be set to 1, for the Eth mainnet.
+    /// `options` takes a vector of `SendTxOption` for configuration
     pub fn send_transaction(
         &self,
         to_address: Address,
@@ -196,36 +183,34 @@ impl Web3 {
         value: Uint256,
         own_address: Address,
         secret: PrivateKey,
-        options: Option<SendTxOptions>,
-        // gas_price: Option<Uint256>,
-        // gas_price_multiplier: Option<Uint256>,
-        // gas_limit: Option<Uint256>,
-        // network_id: Option<u64>,
+        options: Vec<SendTxOption>,
     ) -> Box<Future<Item = Uint256, Error = Error>> {
         let salf = self.clone();
 
-        let options = if let Some(opts) = options {
-            opts
-        } else {
-            SendTxOptions::default()
-        };
+        let mut gas_price = None;
+        let mut gas_price_multiplier = 1u64.into();
+        let mut gas_limit = None;
+        let mut network_id = 1u64;
 
-        let gas_price = if let Some(gp) = options.gas_price {
+        for option in options {
+            match option {
+                SendTxOption::GasPrice(gp) => gas_price = Some(gp),
+                SendTxOption::GasPriceMultiplier(gpm) => gas_price_multiplier = gpm,
+                SendTxOption::GasLimit(gl) => gas_limit = Some(gl),
+                SendTxOption::NetworkId(ni) => network_id = ni,
+            }
+        }
+
+        let gas_price = if let Some(gp) = gas_price {
             Box::new(futures::future::ok(gp)) as Box<Future<Item = Uint256, Error = Error>>
         } else {
-            Box::new(self.eth_gas_price().and_then({
-                let options = options.clone();
-                |gp| {
-                    if let Some(gpm) = options.gas_price_multiplier {
-                        Ok(gp * gpm)
-                    } else {
-                        Ok(gp)
-                    }
-                }
-            }))
+            Box::new(
+                self.eth_gas_price()
+                    .and_then(|gp| Ok(gp * gas_price_multiplier)),
+            )
         };
 
-        let gas_limit = if let Some(gl) = options.gas_limit {
+        let gas_limit = if let Some(gl) = gas_limit {
             Box::new(futures::future::ok(gl)) as Box<Future<Item = Uint256, Error = Error>>
         } else {
             Box::new(self.eth_estimate_gas(TransactionRequest {
@@ -241,8 +226,6 @@ impl Web3 {
         };
 
         let transaction_count = self.eth_get_transaction_count(own_address);
-
-        let network_id = options.network_id;
 
         let props = gas_price.join3(gas_limit, transaction_count);
 
