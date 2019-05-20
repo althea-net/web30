@@ -29,6 +29,25 @@ pub struct Web3 {
     jsonrpc_client: Arc<Box<HTTPClient>>,
 }
 
+#[derive(Clone)]
+pub struct SendTxOptions {
+    pub gas_price: Option<Uint256>,
+    pub gas_price_multiplier: Option<Uint256>,
+    pub gas_limit: Option<Uint256>,
+    pub network_id: u64,
+}
+
+impl Default for SendTxOptions {
+    fn default() -> Self {
+        Self {
+            gas_price: None,
+            gas_limit: None,
+            gas_price_multiplier: None,
+            network_id: 1u64,
+        }
+    }
+}
+
 impl Web3 {
     pub fn new(url: &str) -> Self {
         Self {
@@ -177,36 +196,59 @@ impl Web3 {
         value: Uint256,
         own_address: Address,
         secret: PrivateKey,
-        gas_price: Option<Uint256>,
-        network_id: Option<u64>,
+        options: Option<SendTxOptions>,
+        // gas_price: Option<Uint256>,
+        // gas_price_multiplier: Option<Uint256>,
+        // gas_limit: Option<Uint256>,
+        // network_id: Option<u64>,
     ) -> Box<Future<Item = Uint256, Error = Error>> {
         let salf = self.clone();
-        let transaction = TransactionRequest {
-            from: None,
-            to: to_address,
-            nonce: None,     //nonce,
-            gas_price: None, //gas_price.into(),
-            gas: None,
 
-            value: Some(value.clone().into()),
-            data: Some(data.clone().into()),
-        };
-
-        let props = if let Some(gp) = gas_price {
-            Box::new(futures::future::ok(gp).join3(
-                self.eth_get_transaction_count(own_address),
-                self.eth_estimate_gas(transaction),
-            )) as Box<Future<Item = (Uint256, Uint256, Uint256), Error = Error>>
+        let options = if let Some(opts) = options {
+            opts
         } else {
-            Box::new(self.eth_gas_price().join3(
-                self.eth_get_transaction_count(own_address),
-                self.eth_estimate_gas(transaction),
-            ))
+            SendTxOptions::default()
         };
+
+        let gas_price = if let Some(gp) = options.gas_price {
+            Box::new(futures::future::ok(gp)) as Box<Future<Item = Uint256, Error = Error>>
+        } else {
+            Box::new(self.eth_gas_price().and_then({
+                let options = options.clone();
+                |gp| {
+                    if let Some(gpm) = options.gas_price_multiplier {
+                        Ok(gp * gpm)
+                    } else {
+                        Ok(gp)
+                    }
+                }
+            }))
+        };
+
+        let gas_limit = if let Some(gl) = options.gas_limit {
+            Box::new(futures::future::ok(gl)) as Box<Future<Item = Uint256, Error = Error>>
+        } else {
+            Box::new(self.eth_estimate_gas(TransactionRequest {
+                from: None,
+                to: to_address,
+                nonce: None,
+                gas_price: None,
+                gas: None,
+
+                value: Some(value.clone().into()),
+                data: Some(data.clone().into()),
+            }))
+        };
+
+        let transaction_count = self.eth_get_transaction_count(own_address);
+
+        let network_id = options.network_id;
+
+        let props = gas_price.join3(gas_limit, transaction_count);
 
         Box::new(
             props
-                .and_then(move |(gas_price, nonce, gas_limit)| {
+                .and_then(move |(gas_price, gas_limit, nonce)| {
                     println!(
                         "GAS PRCIE: {:?}, GAS LIMIT: {:?}, NOOONCE: {:?}",
                         gas_price, gas_limit, nonce
@@ -215,13 +257,11 @@ impl Web3 {
                         to: to_address,
                         nonce: nonce,
                         gas_price: gas_price.into(),
-                        gas_limit: gas_limit.into(), //6721975u32.into(),
+                        gas_limit: gas_limit.into(),
                         value,
                         data,
                         signature: None,
                     };
-
-                    let network_id = if let Some(id) = network_id { id } else { 1u64 };
 
                     let transaction = transaction.sign(&secret, Some(network_id));
 
