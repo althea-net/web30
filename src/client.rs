@@ -15,7 +15,7 @@ use futures_timer::Interval;
 use num256::Uint256;
 use std::sync::Arc;
 use std::time::Duration;
-use types::{Data, UnpaddedHex};
+use types::{Data, SendTxOption, UnpaddedHex};
 
 fn bytes_to_data(s: &[u8]) -> String {
     let mut foo = "0x".to_string();
@@ -27,13 +27,6 @@ fn bytes_to_data(s: &[u8]) -> String {
 #[derive(Clone)]
 pub struct Web3 {
     jsonrpc_client: Arc<Box<HTTPClient>>,
-}
-
-pub enum SendTxOption {
-    GasPrice(Uint256),
-    GasPriceMultiplier(Uint256),
-    GasLimit(Uint256),
-    NetworkId(u64),
 }
 
 impl Web3 {
@@ -219,7 +212,6 @@ impl Web3 {
                 nonce: None,
                 gas_price: None,
                 gas: None,
-
                 value: Some(value.clone().into()),
                 data: Some(data.clone().into()),
             }))

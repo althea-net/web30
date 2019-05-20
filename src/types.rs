@@ -174,11 +174,18 @@ impl From<Uint256> for UnpaddedHex {
   }
 }
 
-/// This struct currently only has the 'timestamp' field. You can add the others using the example
-/// JSON pasted above this comment in the source code.
+/// This struct currently only has the 'timestamp' field.
 #[derive(Serialize, Debug, Deserialize)]
 pub struct Block {
   pub timestamp: Uint256,
+}
+
+/// Used to configure send_transaction
+pub enum SendTxOption {
+  GasPrice(Uint256),
+  GasPriceMultiplier(Uint256),
+  GasLimit(Uint256),
+  NetworkId(u64),
 }
 
 #[test]
