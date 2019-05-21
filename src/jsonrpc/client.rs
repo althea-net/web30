@@ -18,6 +18,7 @@ pub trait Client {
         &self,
         method: &str,
         params: T,
+        timeout: Duration,
     ) -> Box<Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
@@ -52,6 +53,7 @@ impl Client for HTTPClient {
         &self,
         method: &str,
         params: T,
+        timeout: Duration,
     ) -> Box<Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
@@ -66,7 +68,7 @@ impl Client for HTTPClient {
                 .json(payload)
                 .expect("json error")
                 .send()
-                .timeout(Duration::from_millis(1000))
+                .timeout(timeout)
                 .from_err()
                 .and_then(|response| {
                     response.body().from_err().and_then(move |b: Bytes| {
