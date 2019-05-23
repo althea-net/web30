@@ -1,8 +1,7 @@
 use clarity::utils::{bytes_to_hex_str, hex_str_to_bytes};
-use clarity::{Address, BigEndianInt};
+use clarity::Address;
 use num256::Uint256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
 use std::ops::Deref;
 
 /// Serializes slice of data as "UNFORMATTED DATA" format required
@@ -188,10 +187,15 @@ pub enum SendTxOption {
   NetworkId(u64),
 }
 
-#[test]
-fn decode_log() {
-  let res: Vec<Log> = serde_json::from_str(
-    r#"[{
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use serde_json::Value;
+
+  #[test]
+  fn decode_log() {
+    let res: Vec<Log> = serde_json::from_str(
+      r#"[{
       "address": "0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359",
       "blockHash": "0xd8fb35a10b60e5fd1848a83d052424954e4a400fc7826bf85a743ff55acf73d3",
       "blockNumber": "0x74de5d",
@@ -206,15 +210,15 @@ fn decode_log() {
       "transactionHash": "0xceb484eb92fd7ad626bc5aced6d669a693baf3d776b515a08d65fafca633a6a6",
       "transactionIndex": "0xc"
     }]"#,
-  )
-  .unwrap();
+    )
+    .unwrap();
 
-  println!("{:#?}", res);
-}
+    println!("{:#?}", res);
+  }
 
-#[test]
-fn decode_block() {
-  let original = r#"{
+  #[test]
+  fn decode_block() {
+    let original = r#"{
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
@@ -245,11 +249,12 @@ fn decode_block() {
   }
 }"#;
 
-  let value_from_string: Value = serde_json::from_str(original).unwrap();
+    let value_from_string: Value = serde_json::from_str(original).unwrap();
 
-  let decoded: TransactionResponse = serde_json::from_str(original).unwrap();
+    let decoded: TransactionResponse = serde_json::from_str(original).unwrap();
 
-  let value_from_struct: Value = serde_json::to_value(&decoded).unwrap();
+    let value_from_struct: Value = serde_json::to_value(&decoded).unwrap();
 
-  assert_json_include!(actual: value_from_string, expected: value_from_struct);
+    assert_json_include!(actual: value_from_string, expected: value_from_struct);
+  }
 }

@@ -1,3 +1,6 @@
+#![warn(clippy::all)]
+#![allow(clippy::pedantic)]
+
 extern crate serde;
 extern crate serde_json;
 #[macro_use]
@@ -12,9 +15,10 @@ extern crate futures_timer;
 extern crate tokio;
 #[macro_use]
 extern crate log;
+extern crate bytes;
+#[cfg(test)]
 #[macro_use]
 extern crate assert_json_diff;
-extern crate bytes;
 
 pub mod client;
 pub mod jsonrpc;
