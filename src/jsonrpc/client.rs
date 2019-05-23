@@ -73,7 +73,15 @@ impl Client for HTTPClient {
                 .and_then(|response| {
                     response.body().from_err().and_then(move |b: Bytes| {
                         println!("\nGot response {:?}", b);
-                        let res: Response<R> = serde_json::de::from_slice(&*b).unwrap();
+                        let res: Response<R> = match serde_json::de::from_slice(&*b) {
+                            Ok(response) => response,
+                            Err(e) => {
+                                return Err(format_err!(
+                                    "Failure deserializing full node response {:?}",
+                                    e
+                                ))
+                            }
+                        };
                         //Response<R>
                         trace!("got web3 response {:#?}", res);
                         let data = res.data.into_result();
