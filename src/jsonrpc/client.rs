@@ -57,7 +57,6 @@ impl Client for HTTPClient {
     ) -> Box<Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
-        // T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);

@@ -441,3 +441,65 @@ impl Web3 {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn setup() -> (PrivateKey, Address, Web3) {
+        let pk: PrivateKey = PrivateKey::from_str(&format!(
+            "FE1FC0A7A29503BAF72274A{}601D67309E8F3{}D22",
+            "AA3ECDE6DB3E20", "29F7AB4BA52"
+        ))
+        .unwrap();
+
+        let addr: Address =
+            Address::from_str("0x79AE13432950bF5CDC3499f8d4Cf5963c3F0d42c".into()).unwrap();
+
+        let web3 = Web3::new("https://eth.althea.org", Duration::from_secs(600));
+
+        (pk, addr, web3)
+    }
+
+    #[test]
+    fn test_contract_call() {
+        let system = actix::System::new("test");
+        let (pk, addr, web3) = setup();
+        let dai_contract =
+            Address::from_str("0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359".into()).unwrap();
+        let ten_c_dai =
+            Address::from_str("0x6d943740746934b2f5D9c9E6Cb1908758A42452f".into()).unwrap();
+
+        actix::spawn(
+            web3.contract_call(
+                dai_contract,
+                "balanceOf(address)",
+                &[ten_c_dai.into()],
+                addr,
+            )
+            .and_then(|balance| {
+                let is = Uint256::from_bytes_be(match balance.get(0..32) {
+                    Some(val) => val,
+                    None => bail!(
+                        "Got bad output for DAI balance from the full node {:?}",
+                        balance
+                    ),
+                });
+
+                let should_be: Uint256 = 100000000000000000u64.into();
+
+                assert_eq!(is, should_be);
+
+                Ok(())
+            })
+            .then(|res| {
+                res.unwrap();
+                actix::System::current().stop();
+                Box::new(futures::future::ok(()))
+            }),
+        );
+
+        system.run();
+    }
+}
