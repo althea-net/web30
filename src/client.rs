@@ -18,9 +18,9 @@ use std::time::Duration;
 use types::{Data, SendTxOption, UnpaddedHex};
 
 fn bytes_to_data(s: &[u8]) -> String {
-    let mut foo = "0x".to_string();
-    foo.push_str(&bytes_to_hex_str(&s));
-    foo
+    let mut val = "0x".to_string();
+    val.push_str(&bytes_to_hex_str(&s));
+    val
 }
 
 /// An instance of Web3Client.
@@ -242,9 +242,9 @@ impl Web3 {
                     );
                     let transaction = Transaction {
                         to: to_address,
-                        nonce: nonce,
-                        gas_price: gas_price.into(),
-                        gas_limit: gas_limit.into(),
+                        nonce,
+                        gas_price,
+                        gas_limit,
                         value,
                         data,
                         signature: None,
@@ -312,7 +312,7 @@ impl Web3 {
 
         // Build a filter with specified topics
         let mut new_filter = NewFilter::default();
-        new_filter.address = vec![contract_address.clone()];
+        new_filter.address = vec![contract_address];
         new_filter.topics = Some(vec![
             Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
             topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
@@ -321,7 +321,7 @@ impl Web3 {
 
         Box::new(salf.eth_get_logs(new_filter).and_then(|logs| {
             // Assuming the latest log is at the head of the vec
-            Ok(logs.first().map(|log| log.clone()))
+            Ok(logs.first().cloned())
         }))
     }
 
@@ -355,7 +355,7 @@ impl Web3 {
         let salf = self.clone();
 
         let new_filter = NewFilter {
-            address: vec![contract_address.clone()],
+            address: vec![contract_address],
             from_block: None,
             to_block: None,
             topics: Some(vec![
@@ -402,7 +402,7 @@ impl Web3 {
         let salf = self.clone();
 
         let mut new_filter = NewFilter::default();
-        new_filter.address = vec![contract_address.clone()];
+        new_filter.address = vec![contract_address];
         new_filter.from_block = None;
         new_filter.to_block = None;
         new_filter.topics = Some(vec![
