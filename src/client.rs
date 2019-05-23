@@ -270,33 +270,20 @@ impl Web3 {
         tokens: &[Token],
         own_address: Address,
     ) -> Box<Future<Item = Vec<u8>, Error = Error>> {
-        let salf = self.clone();
-
-        let props = salf
-            .eth_gas_price()
-            .join(salf.eth_get_transaction_count(own_address));
-
-        let payload = encode_call(sig, tokens);
-
         Box::new(
-            props
-                .and_then(move |(gas_price, nonce)| {
-                    let transaction = TransactionRequest {
-                        from: Some(own_address),
-                        to: contract_address,
-                        nonce: Some(UnpaddedHex(nonce)),
-                        gas: None,
-                        gas_price: Some(UnpaddedHex(gas_price)),
-                        value: Some(UnpaddedHex(0u64.into())),
-                        data: Some(Data(payload)),
-                    };
-
-                    salf.eth_call(transaction)
-                })
-                .and_then(|bytes| {
-                    let bytes = bytes.clone();
-                    Ok(bytes.0)
-                }),
+            self.eth_call(TransactionRequest {
+                from: Some(own_address),
+                to: contract_address,
+                nonce: None,
+                gas: None,
+                gas_price: None,
+                value: Some(UnpaddedHex(0u64.into())),
+                data: Some(Data(encode_call(sig, tokens))),
+            })
+            .and_then(|bytes| {
+                let bytes = bytes.clone();
+                Ok(bytes.0)
+            }),
         )
     }
 
