@@ -236,10 +236,6 @@ impl Web3 {
         Box::new(
             props
                 .and_then(move |(gas_price, gas_limit, nonce)| {
-                    println!(
-                        "GAS PRCIE: {:?}, GAS LIMIT: {:?}, NOOONCE: {:?}",
-                        gas_price, gas_limit, nonce
-                    );
                     let transaction = Transaction {
                         to: to_address,
                         nonce,
