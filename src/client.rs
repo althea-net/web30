@@ -363,7 +363,7 @@ impl Web3 {
         };
 
         Box::new(
-            Interval::new(Duration::from_secs(2))
+            Interval::new(Duration::from_secs(10))
                 .from_err()
                 .and_then({
                     let salf = salf.clone();
@@ -409,7 +409,7 @@ impl Web3 {
         ]);
 
         Box::new(salf.eth_new_filter(new_filter).and_then(move |filter_id| {
-            Interval::new(Duration::from_secs(2))
+            Interval::new(Duration::from_secs(10))
                 .from_err()
                 .and_then({
                     let filter_id = filter_id.clone();
