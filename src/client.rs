@@ -161,8 +161,8 @@ impl Web3 {
     ) -> Box<Future<Item = Option<TransactionResponse>, Error = Error>> {
         self.jsonrpc_client.request_method(
             "eth_getTransactionByHash",
-            /// XXX: Technically it doesn't need to be Uint256, but since send_raw_transaction is
-            /// returning it we'll keep it consistent.
+            // XXX: Technically it doesn't need to be Uint256, but since send_raw_transaction is
+            // returning it we'll keep it consistent.
             vec![format!("{:#066x}", hash)],
             self.timeout,
         )

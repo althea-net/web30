@@ -5,7 +5,6 @@ use actix_web::{client, HttpMessage};
 use failure::Error;
 use futures::future::Future;
 use serde::{Deserialize, Serialize};
-use serde_json::ser::to_string;
 use std::cell::RefCell;
 use std::str;
 use std::sync::{Arc, Mutex};
@@ -59,7 +58,7 @@ impl Client for HTTPClient {
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);
-        println!("\nweb3 request {:?}", to_string(&payload));
+        //println!("\nweb3 request {:?}", to_string(&payload));
         Box::new(
             client::post(&self.url)
                 .header(header::CONTENT_TYPE, "application/json")
