@@ -16,7 +16,7 @@ pub trait Client {
         method: &str,
         params: T,
         timeout: Duration,
-    ) -> Box<Future<Item = R, Error = Error>>
+    ) -> Box<dyn Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
         // T: std::fmt::Debug,
@@ -51,7 +51,7 @@ impl Client for HTTPClient {
         method: &str,
         params: T,
         timeout: Duration,
-    ) -> Box<Future<Item = R, Error = Error>>
+    ) -> Box<dyn Future<Item = R, Error = Error>>
     where
         for<'de> R: Deserialize<'de>,
         // T: std::fmt::Debug,
