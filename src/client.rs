@@ -437,3 +437,23 @@ impl Web3 {
         }))
     }
 }
+
+#[test]
+fn test_complex_response() {
+    use actix_web::actix::Arbiter;
+    use actix_web::actix::System;
+    System::run(|| {
+        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+        let txid1 = "0x741c0f3a0edceedf8a26b3c376a80d13324918f4215b1a881fc43503a2813835"
+            .parse()
+            .unwrap();
+        Arbiter::spawn(web3.eth_get_transaction_by_hash(txid1).then(|val| {
+            let val = val.expect("Actix failure");
+            let response = val.expect("Failed to parse transaction response");
+            assert!(response.block_number.unwrap() > 10u32.into());
+
+            System::current().stop();
+            Ok(())
+        }));
+    });
+}
