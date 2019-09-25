@@ -103,7 +103,10 @@ impl Web3 {
         self.jsonrpc_client
             .request_method("eth_estimateGas", vec![transaction], self.timeout)
     }
-    pub fn eth_get_balance(&self, address: Address) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    pub fn eth_get_balance(
+        &self,
+        address: Address,
+    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
         self.jsonrpc_client.request_method(
             "eth_getBalance",
             vec![address.to_string(), "latest".to_string()],
@@ -171,7 +174,10 @@ impl Web3 {
         self.jsonrpc_client
             .request_method("evm_snapshot", Vec::<String>::new(), self.timeout)
     }
-    pub fn evm_revert(&self, snapshot_id: Uint256) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    pub fn evm_revert(
+        &self,
+        snapshot_id: Uint256,
+    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
         self.jsonrpc_client.request_method(
             "evm_revert",
             vec![format!("{:#066x}", snapshot_id)],

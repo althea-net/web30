@@ -10,9 +10,9 @@ use std::ops::Deref;
 /// See more https://github.com/ethereum/wiki/wiki/JSON-RPC#hex-value-encoding
 pub fn data_serialize<S>(x: &[u8], s: S) -> Result<S::Ok, S::Error>
 where
-  S: Serializer,
+    S: Serializer,
 {
-  s.serialize_str(&format!("0x{}", bytes_to_hex_str(x)))
+    s.serialize_str(&format!("0x{}", bytes_to_hex_str(x)))
 }
 
 /// Deserializes slice of data as "UNFORMATTED DATA" format required
@@ -21,64 +21,64 @@ where
 /// See more https://github.com/ethereum/wiki/wiki/JSON-RPC#hex-value-encoding
 pub fn data_deserialize<'de, D>(d: D) -> Result<Vec<u8>, D::Error>
 where
-  D: Deserializer<'de>,
+    D: Deserializer<'de>,
 {
-  let s = String::deserialize(d)?;
-  hex_str_to_bytes(&s).map_err(serde::de::Error::custom)
+    let s = String::deserialize(d)?;
+    hex_str_to_bytes(&s).map_err(serde::de::Error::custom)
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct Log {
-  /// true when the log was removed, due to a chain reorganization. false if its a valid log.
-  pub removed: Option<bool>,
-  /// integer of the log index position in the block. null when its pending log.
-  #[serde(rename = "logIndex")]
-  pub log_index: Option<Uint256>,
-  /// integer of the transactions index position log was created from. null when its pending log.
-  #[serde(rename = "transactionIndex")]
-  pub transaction_index: Option<Uint256>,
-  /// hash of the transactions this log was created from. null when its pending log.
-  #[serde(rename = "transactionHash")]
-  pub transaction_hash: Option<Data>,
-  /// hash of the block where this log was in. null when its pending. null when its pending log.
-  #[serde(rename = "blockHash")]
-  pub block_hash: Option<Data>,
-  /// the block number where this log was in. null when its pending. null when its pending log.
-  #[serde(rename = "blockNumber")]
-  pub block_number: Option<Uint256>,
-  /// 20 Bytes - address from which this log originated.
-  pub address: Address,
-  /// contains the non-indexed arguments of the log.
-  pub data: Data,
-  /// Array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity:
-  /// The first topic is the hash of the signature of the
-  /// event (e.g. Deposit(address,bytes32,uint256)), except you declared
-  /// the event with the anonymous specifier.)
-  pub topics: Vec<Data>,
-  #[serde(rename = "type")]
-  pub type_: Option<String>,
+    /// true when the log was removed, due to a chain reorganization. false if its a valid log.
+    pub removed: Option<bool>,
+    /// integer of the log index position in the block. null when its pending log.
+    #[serde(rename = "logIndex")]
+    pub log_index: Option<Uint256>,
+    /// integer of the transactions index position log was created from. null when its pending log.
+    #[serde(rename = "transactionIndex")]
+    pub transaction_index: Option<Uint256>,
+    /// hash of the transactions this log was created from. null when its pending log.
+    #[serde(rename = "transactionHash")]
+    pub transaction_hash: Option<Data>,
+    /// hash of the block where this log was in. null when its pending. null when its pending log.
+    #[serde(rename = "blockHash")]
+    pub block_hash: Option<Data>,
+    /// the block number where this log was in. null when its pending. null when its pending log.
+    #[serde(rename = "blockNumber")]
+    pub block_number: Option<Uint256>,
+    /// 20 Bytes - address from which this log originated.
+    pub address: Address,
+    /// contains the non-indexed arguments of the log.
+    pub data: Data,
+    /// Array of 0 to 4 32 Bytes DATA of indexed log arguments. (In solidity:
+    /// The first topic is the hash of the signature of the
+    /// event (e.g. Deposit(address,bytes32,uint256)), except you declared
+    /// the event with the anonymous specifier.)
+    pub topics: Vec<Data>,
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Data(
-  #[serde(
-    serialize_with = "data_serialize",
-    deserialize_with = "data_deserialize"
-  )]
-  pub Vec<u8>,
+    #[serde(
+        serialize_with = "data_serialize",
+        deserialize_with = "data_deserialize"
+    )]
+    pub Vec<u8>,
 );
 
 impl Deref for Data {
-  type Target = Vec<u8>;
-  fn deref(&self) -> &Vec<u8> {
-    &self.0
-  }
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Vec<u8> {
+        &self.0
+    }
 }
 
 impl From<Vec<u8>> for Data {
-  fn from(v: Vec<u8>) -> Self {
-    Data(v)
-  }
+    fn from(v: Vec<u8>) -> Self {
+        Data(v)
+    }
 }
 
 /// As received by getTransactionByHash
@@ -86,116 +86,116 @@ impl From<Vec<u8>> for Data {
 /// See more: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_gettransactionbyhash
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct TransactionResponse {
-  /// hash of the block where this transaction was in. null when its pending.
-  #[serde(rename = "blockHash")]
-  pub block_hash: Option<Data>,
-  /// block number where this transaction was in. null when its pending.
-  #[serde(rename = "blockNumber")]
-  pub block_number: Option<Uint256>,
-  /// address of the sender.
-  pub from: Address,
-  /// gas provided by the sender.
-  pub gas: Uint256,
-  /// gas price provided by the sender in Wei.
-  #[serde(rename = "gasPrice")]
-  pub gas_price: Uint256,
-  /// hash of the transaction
-  pub hash: Data,
-  /// the data send along with the transaction.
-  pub input: Data,
-  /// the number of transactions made by the sender prior to this one.
-  pub nonce: Uint256,
-  /// address of the receiver. null when its a contract creation transaction.
-  pub to: Address,
-  /// integer of the transaction's index position in the block. null when its pending.
-  #[serde(rename = "transactionIndex")]
-  pub transaction_index: Uint256,
-  /// value transferred in Wei.
-  pub value: Uint256,
-  /// ECDSA recovery id
-  pub v: Uint256,
-  /// ECDSA signature r
-  pub r: Uint256,
-  /// ECDSA signature s
-  pub s: Uint256,
+    /// hash of the block where this transaction was in. null when its pending.
+    #[serde(rename = "blockHash")]
+    pub block_hash: Option<Data>,
+    /// block number where this transaction was in. null when its pending.
+    #[serde(rename = "blockNumber")]
+    pub block_number: Option<Uint256>,
+    /// address of the sender.
+    pub from: Address,
+    /// gas provided by the sender.
+    pub gas: Uint256,
+    /// gas price provided by the sender in Wei.
+    #[serde(rename = "gasPrice")]
+    pub gas_price: Uint256,
+    /// hash of the transaction
+    pub hash: Data,
+    /// the data send along with the transaction.
+    pub input: Data,
+    /// the number of transactions made by the sender prior to this one.
+    pub nonce: Uint256,
+    /// address of the receiver. null when its a contract creation transaction.
+    pub to: Address,
+    /// integer of the transaction's index position in the block. null when its pending.
+    #[serde(rename = "transactionIndex")]
+    pub transaction_index: Uint256,
+    /// value transferred in Wei.
+    pub value: Uint256,
+    /// ECDSA recovery id
+    pub v: Uint256,
+    /// ECDSA signature r
+    pub r: Uint256,
+    /// ECDSA signature s
+    pub s: Uint256,
 }
 
 #[derive(Serialize, Default, Debug, Clone)]
 pub struct NewFilter {
-  #[serde(rename = "fromBlock", skip_serializing_if = "Option::is_none")]
-  pub from_block: Option<String>,
-  #[serde(rename = "toBlock", skip_serializing_if = "Option::is_none")]
-  pub to_block: Option<String>,
-  pub address: Vec<Address>,
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub topics: Option<Vec<Option<Vec<Option<String>>>>>,
+    #[serde(rename = "fromBlock", skip_serializing_if = "Option::is_none")]
+    pub from_block: Option<String>,
+    #[serde(rename = "toBlock", skip_serializing_if = "Option::is_none")]
+    pub to_block: Option<String>,
+    pub address: Vec<Address>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topics: Option<Vec<Option<Vec<Option<String>>>>>,
 }
 
 #[derive(Serialize)]
 pub struct TransactionRequest {
-  //The address the transaction is send from.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub from: Option<Address>,
-  // The address the transaction is directed to.
-  pub to: Address,
-  // Integer of the gas provided for the transaction execution. It will return unused gas.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub gas: Option<UnpaddedHex>,
-  // Integer of the gasPrice used for each paid gas
-  #[serde(rename = "gasPrice")]
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub gas_price: Option<UnpaddedHex>,
-  // Integer of the value sent with this transaction
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub value: Option<UnpaddedHex>,
-  // The compiled code of a contract OR the hash of the invoked method signature and encoded parameters. For details see Ethereum Contract ABI
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub data: Option<Data>,
-  //  This allows to overwrite your own pending transactions that use the same nonce.
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub nonce: Option<UnpaddedHex>,
+    //The address the transaction is send from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub from: Option<Address>,
+    // The address the transaction is directed to.
+    pub to: Address,
+    // Integer of the gas provided for the transaction execution. It will return unused gas.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gas: Option<UnpaddedHex>,
+    // Integer of the gasPrice used for each paid gas
+    #[serde(rename = "gasPrice")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gas_price: Option<UnpaddedHex>,
+    // Integer of the value sent with this transaction
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<UnpaddedHex>,
+    // The compiled code of a contract OR the hash of the invoked method signature and encoded parameters. For details see Ethereum Contract ABI
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Data>,
+    //  This allows to overwrite your own pending transactions that use the same nonce.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nonce: Option<UnpaddedHex>,
 }
 
 pub struct UnpaddedHex(pub Uint256);
 
 impl Serialize for UnpaddedHex {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    serializer.serialize_str(&format!("{:#x}", *self.0))
-  }
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&format!("{:#x}", *self.0))
+    }
 }
 
 impl From<Uint256> for UnpaddedHex {
-  fn from(v: Uint256) -> Self {
-    UnpaddedHex(v)
-  }
+    fn from(v: Uint256) -> Self {
+        UnpaddedHex(v)
+    }
 }
 
 /// This struct currently only has the 'timestamp' field.
 #[derive(Serialize, Debug, Deserialize)]
 pub struct Block {
-  pub timestamp: Uint256,
+    pub timestamp: Uint256,
 }
 
 /// Used to configure send_transaction
 pub enum SendTxOption {
-  GasPrice(Uint256),
-  GasPriceMultiplier(Uint256),
-  GasLimit(Uint256),
-  NetworkId(u64),
+    GasPrice(Uint256),
+    GasPriceMultiplier(Uint256),
+    GasLimit(Uint256),
+    NetworkId(u64),
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use serde_json::Value;
+    use super::*;
+    use serde_json::Value;
 
-  #[test]
-  fn decode_log() {
-    let res: Vec<Log> = serde_json::from_str(
-      r#"[{
+    #[test]
+    fn decode_log() {
+        let res: Vec<Log> = serde_json::from_str(
+            r#"[{
       "address": "0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359",
       "blockHash": "0xd8fb35a10b60e5fd1848a83d052424954e4a400fc7826bf85a743ff55acf73d3",
       "blockNumber": "0x74de5d",
@@ -210,15 +210,15 @@ mod tests {
       "transactionHash": "0xceb484eb92fd7ad626bc5aced6d669a693baf3d776b515a08d65fafca633a6a6",
       "transactionIndex": "0xc"
     }]"#,
-    )
-    .unwrap();
+        )
+        .unwrap();
 
-    println!("{:#?}", res);
-  }
+        println!("{:#?}", res);
+    }
 
-  #[test]
-  fn decode_block() {
-    let original = r#"{
+    #[test]
+    fn decode_block() {
+        let original = r#"{
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
@@ -249,12 +249,12 @@ mod tests {
   }
 }"#;
 
-    let value_from_string: Value = serde_json::from_str(original).unwrap();
+        let value_from_string: Value = serde_json::from_str(original).unwrap();
 
-    let decoded: TransactionResponse = serde_json::from_str(original).unwrap();
+        let decoded: TransactionResponse = serde_json::from_str(original).unwrap();
 
-    let value_from_struct: Value = serde_json::to_value(&decoded).unwrap();
+        let value_from_struct: Value = serde_json::to_value(&decoded).unwrap();
 
-    assert_json_include!(actual: value_from_string, expected: value_from_struct);
-  }
+        assert_json_include!(actual: value_from_string, expected: value_from_struct);
+    }
 }
