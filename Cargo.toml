@@ -14,9 +14,9 @@ num256 = "0.2"
 futures-timer = "0.1"
 futures = "0.1"
 failure = "0.1"
-actix-web = {version = "0.7",  default-features = false, features=["ssl"]}
+actix-web = {version = "1.0",  default-features = false, features=["ssl", "client"]}
 tokio = "0.1"
-actix = "0.7"
+actix = "0.8"
 log = "0.4"
 bytes = "0.4.12"
 assert-json-diff = "1.0.0"
