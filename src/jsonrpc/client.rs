@@ -1,31 +1,18 @@
 use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
+use actix_web::client::Client;
 use actix_web::http::header;
-use actix_web::{client, HttpMessage};
 use failure::Error;
-use futures::future::Future;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub trait Client {
-    fn request_method<T: Serialize, R: 'static>(
-        &self,
-        method: &str,
-        params: T,
-        timeout: Duration,
-    ) -> Box<dyn Future<Item = R, Error = Error>>
-    where
-        for<'de> R: Deserialize<'de>,
-        // T: std::fmt::Debug,
-        R: std::fmt::Debug;
-}
-
 pub struct HTTPClient {
     id_counter: Arc<Mutex<RefCell<u64>>>,
     url: String,
+    client: Client,
 }
 
 impl HTTPClient {
@@ -33,6 +20,7 @@ impl HTTPClient {
         Self {
             id_counter: Arc::new(Mutex::new(RefCell::new(0u64))),
             url: url.to_string(),
+            client: Client::default(),
         }
     }
 
@@ -43,43 +31,31 @@ impl HTTPClient {
         *value += 1;
         *value
     }
-}
 
-impl Client for HTTPClient {
-    fn request_method<T: Serialize, R: 'static>(
+    pub async fn request_method<T: Serialize, R: 'static>(
         &self,
         method: &str,
         params: T,
         timeout: Duration,
-    ) -> Box<dyn Future<Item = R, Error = Error>>
+    ) -> Result<R, Error>
     where
         for<'de> R: Deserialize<'de>,
         // T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);
-        //println!("\nweb3 request {:?}", to_string(&payload));
-        Box::new(
-            client::post(&self.url)
-                .header(header::CONTENT_TYPE, "application/json")
-                .json(payload)
-                .expect("json error")
-                .send()
-                .timeout(timeout)
-                .from_err()
-                .and_then(|response| {
-                    response
-                        .json()
-                        .from_err()
-                        .and_then(move |res: Response<R>| {
-                            //Response<R>
-                            trace!("got web3 response {:#?}", res);
-                            let data = res.data.into_result();
-                            data.map_err(move |e| {
-                                format_err!("JSONRPC Error {}: {}", e.code, e.message)
-                            })
-                        })
-                }),
-        )
+        let res = self
+            .client
+            .post(&self.url)
+            .header(header::CONTENT_TYPE, "application/json")
+            .timeout(timeout)
+            .send_json(&payload)
+            .await;
+        let mut res = res.unwrap();
+        let res: Response<R> = res.json().await.unwrap();
+        //Response<R>
+        trace!("got web3 response {:#?}", res);
+        let data = res.data.into_result();
+        data.map_err(move |e| format_err!("JSONRPC Error {}: {}", e.code, e.message))
     }
 }

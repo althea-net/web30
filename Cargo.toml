@@ -1,9 +1,10 @@
 [package]
 name = "web30"
-version = "0.4.3"
+version = "0.5.0"
 authors = ["Michal Papierski", "Jehan Tremback"]
-description = "10x better than web3"
+description = "Async endian safe web3 library"
 license = "Apache-2.0"
+edition = "2018"
 
 [dependencies]
 serde = "1.0"
@@ -11,12 +12,13 @@ serde_derive = "1.0"
 serde_json = "1.0"
 clarity = "0.1"
 num256 = "0.2"
-futures-timer = "0.1"
-futures = "0.1"
+futures-timer = "3"
+futures = "0.3"
 failure = "0.1"
-actix-web = {version = "0.7",  default-features = false, features=["ssl"]}
-tokio = "0.1"
-actix = "0.7"
+actix-web = {version = "2.0",  default-features = false, features=["openssl"]}
+tokio = {version = "0.2", features=["macros"]}
+actix = "0.9"
 log = "0.4"
-bytes = "0.4.12"
-assert-json-diff = "1.0.0"
+bytes = "0.5"
+assert-json-diff = "1"
+

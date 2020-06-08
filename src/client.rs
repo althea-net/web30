@@ -4,18 +4,17 @@
 //! work on big endian. We can do better than that just crafting our own
 //! JSONRPC requests.
 //!
-use crate::jsonrpc::client::{Client, HTTPClient};
+use crate::jsonrpc::client::HTTPClient;
 use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
+use crate::types::{Data, SendTxOption, UnpaddedHex};
 use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use failure::Error;
-use futures::{Future, IntoFuture, Stream};
-use futures_timer::Interval;
 use num256::Uint256;
 use std::sync::Arc;
 use std::time::Duration;
-use types::{Data, SendTxOption, UnpaddedHex};
+use tokio::time::delay_for;
 
 fn bytes_to_data(s: &[u8]) -> String {
     let mut val = "0x".to_string();
@@ -38,156 +37,153 @@ impl Web3 {
         }
     }
 
-    pub fn eth_accounts(&self) -> Box<dyn Future<Item = Vec<Address>, Error = Error>> {
+    pub async fn eth_accounts(&self) -> Result<Vec<Address>, Error> {
         self.jsonrpc_client
             .request_method("eth_accounts", Vec::<String>::new(), self.timeout)
+            .await
     }
-    pub fn net_version(&self) -> Box<dyn Future<Item = String, Error = Error>> {
+    pub async fn net_version(&self) -> Result<String, Error> {
         self.jsonrpc_client
             .request_method("net_version", Vec::<String>::new(), self.timeout)
+            .await
     }
-    pub fn eth_new_filter(
-        &self,
-        new_filter: NewFilter,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    pub async fn eth_new_filter(&self, new_filter: NewFilter) -> Result<Uint256, Error> {
         self.jsonrpc_client
             .request_method("eth_newFilter", vec![new_filter], self.timeout)
+            .await
     }
-    pub fn eth_get_filter_changes(
-        &self,
-        filter_id: Uint256,
-    ) -> Box<dyn Future<Item = Vec<Log>, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_getFilterChanges",
-            vec![format!("{:#x}", filter_id.clone())],
-            self.timeout,
-        )
+    pub async fn eth_get_filter_changes(&self, filter_id: Uint256) -> Result<Vec<Log>, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_getFilterChanges",
+                vec![format!("{:#x}", filter_id.clone())],
+                self.timeout,
+            )
+            .await
     }
-    pub fn eth_uninstall_filter(
-        &self,
-        filter_id: Uint256,
-    ) -> Box<dyn Future<Item = bool, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_uninstallFilter",
-            vec![format!("{:#x}", filter_id.clone())],
-            self.timeout,
-        )
+    pub async fn eth_uninstall_filter(&self, filter_id: Uint256) -> Result<bool, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_uninstallFilter",
+                vec![format!("{:#x}", filter_id.clone())],
+                self.timeout,
+            )
+            .await
     }
 
-    pub fn eth_get_logs(
-        &self,
-        new_filter: NewFilter,
-    ) -> Box<dyn Future<Item = Vec<Log>, Error = Error>> {
+    pub async fn eth_get_logs(&self, new_filter: NewFilter) -> Result<Vec<Log>, Error> {
         self.jsonrpc_client
             .request_method("eth_getLogs", vec![new_filter], self.timeout)
+            .await
     }
 
-    pub fn eth_get_transaction_count(
-        &self,
-        address: Address,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_getTransactionCount",
-            vec![address.to_string(), "pending".to_string()],
-            self.timeout,
-        )
+    pub async fn eth_get_transaction_count(&self, address: Address) -> Result<Uint256, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_getTransactionCount",
+                vec![address.to_string(), "pending".to_string()],
+                self.timeout,
+            )
+            .await
     }
-    pub fn eth_gas_price(&self) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    pub async fn eth_gas_price(&self) -> Result<Uint256, Error> {
         self.jsonrpc_client
             .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout)
+            .await
     }
-    pub fn eth_estimate_gas(
+    pub async fn eth_estimate_gas(
         &self,
         transaction: TransactionRequest,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    ) -> Result<Uint256, Error> {
         self.jsonrpc_client
             .request_method("eth_estimateGas", vec![transaction], self.timeout)
+            .await
     }
-    pub fn eth_get_balance(
-        &self,
-        address: Address,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_getBalance",
-            vec![address.to_string(), "latest".to_string()],
-            self.timeout,
-        )
+    pub async fn eth_get_balance(&self, address: Address) -> Result<Uint256, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_getBalance",
+                vec![address.to_string(), "latest".to_string()],
+                self.timeout,
+            )
+            .await
     }
-    pub fn eth_send_transaction(
+    pub async fn eth_send_transaction(
         &self,
         transactions: Vec<TransactionRequest>,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    ) -> Result<Uint256, Error> {
         self.jsonrpc_client
             .request_method("eth_sendTransaction", transactions, self.timeout)
+            .await
     }
-    pub fn eth_call(
-        &self,
-        transaction: TransactionRequest,
-    ) -> Box<dyn Future<Item = Data, Error = Error>> {
+    pub async fn eth_call(&self, transaction: TransactionRequest) -> Result<Data, Error> {
         self.jsonrpc_client
             .request_method("eth_call", (transaction, "latest"), self.timeout)
+            .await
     }
-    pub fn eth_block_number(&self) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    pub async fn eth_block_number(&self) -> Result<Uint256, Error> {
         self.jsonrpc_client
             .request_method("eth_blockNumber", Vec::<String>::new(), self.timeout)
+            .await
     }
 
-    pub fn eth_get_block_by_number(
-        &self,
-        block_number: Uint256,
-    ) -> Box<dyn Future<Item = Block, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_getBlockByNumber",
-            (format!("{:#x}", block_number), false),
-            self.timeout,
-        )
+    pub async fn eth_get_block_by_number(&self, block_number: Uint256) -> Result<Block, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_getBlockByNumber",
+                (format!("{:#x}", block_number), false),
+                self.timeout,
+            )
+            .await
     }
 
-    pub fn eth_get_latest_block(&self) -> Box<dyn Future<Item = Block, Error = Error>> {
+    pub async fn eth_get_latest_block(&self) -> Result<Block, Error> {
         self.jsonrpc_client
             .request_method("eth_getBlockByNumber", ("latest", false), self.timeout)
+            .await
     }
 
-    pub fn eth_send_raw_transaction(
-        &self,
-        data: Vec<u8>,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_sendRawTransaction",
-            vec![format!("0x{}", bytes_to_hex_str(&data))],
-            self.timeout,
-        )
+    pub async fn eth_send_raw_transaction(&self, data: Vec<u8>) -> Result<Uint256, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_sendRawTransaction",
+                vec![format!("0x{}", bytes_to_hex_str(&data))],
+                self.timeout,
+            )
+            .await
     }
-    pub fn eth_get_transaction_by_hash(
+    pub async fn eth_get_transaction_by_hash(
         &self,
         hash: Uint256,
-    ) -> Box<dyn Future<Item = Option<TransactionResponse>, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "eth_getTransactionByHash",
-            // XXX: Technically it doesn't need to be Uint256, but since send_raw_transaction is
-            // returning it we'll keep it consistent.
-            vec![format!("{:#066x}", hash)],
-            self.timeout,
-        )
+    ) -> Result<Option<TransactionResponse>, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_getTransactionByHash",
+                // XXX: Technically it doesn't need to be Uint256, but since send_raw_transaction is
+                // returning it we'll keep it consistent.
+                vec![format!("{:#066x}", hash)],
+                self.timeout,
+            )
+            .await
     }
-    pub fn evm_snapshot(&self) -> Box<dyn Future<Item = Uint256, Error = Error>> {
+    pub async fn evm_snapshot(&self) -> Result<Uint256, Error> {
         self.jsonrpc_client
             .request_method("evm_snapshot", Vec::<String>::new(), self.timeout)
+            .await
     }
-    pub fn evm_revert(
-        &self,
-        snapshot_id: Uint256,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
-        self.jsonrpc_client.request_method(
-            "evm_revert",
-            vec![format!("{:#066x}", snapshot_id)],
-            self.timeout,
-        )
+    pub async fn evm_revert(&self, snapshot_id: Uint256) -> Result<Uint256, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "evm_revert",
+                vec![format!("{:#066x}", snapshot_id)],
+                self.timeout,
+            )
+            .await
     }
 
     /// Sends a transaction which changes blockchain state.
     /// `options` takes a vector of `SendTxOption` for configuration
-    pub fn send_transaction(
+    pub async fn send_transaction(
         &self,
         to_address: Address,
         data: Vec<u8>,
@@ -195,9 +191,7 @@ impl Web3 {
         own_address: Address,
         secret: PrivateKey,
         options: Vec<SendTxOption>,
-    ) -> Box<dyn Future<Item = Uint256, Error = Error>> {
-        let salf = self.clone();
-
+    ) -> Result<Uint256, Error> {
         let mut gas_price = None;
         let mut gas_price_multiplier = 1u64.into();
         let mut gas_limit = None;
@@ -213,105 +207,105 @@ impl Web3 {
         }
 
         let gas_price = if let Some(gp) = gas_price {
-            Box::new(futures::future::ok(gp)) as Box<dyn Future<Item = Uint256, Error = Error>>
+            gp
         } else {
-            Box::new(
-                self.eth_gas_price()
-                    .and_then(|gp| Ok(gp * gas_price_multiplier)),
-            )
+            let gp = self.eth_gas_price().await;
+            match gp {
+                Ok(gp) => gp * gas_price_multiplier,
+                Err(e) => return Err(e),
+            }
         };
 
         let gas_limit = if let Some(gl) = gas_limit {
-            Box::new(futures::future::ok(gl)) as Box<dyn Future<Item = Uint256, Error = Error>>
+            gl
         } else {
-            Box::new(self.eth_estimate_gas(TransactionRequest {
-                from: None,
-                to: to_address,
-                nonce: None,
-                gas_price: None,
-                gas: None,
-                value: Some(value.clone().into()),
-                data: Some(data.clone().into()),
-            }))
+            let res = self
+                .eth_estimate_gas(TransactionRequest {
+                    from: None,
+                    to: to_address,
+                    nonce: None,
+                    gas_price: None,
+                    gas: None,
+                    value: Some(value.clone().into()),
+                    data: Some(data.clone().into()),
+                })
+                .await;
+            match res {
+                Ok(r) => r,
+                Err(e) => return Err(e),
+            }
         };
 
-        let transaction_count = self.eth_get_transaction_count(own_address);
+        let nonce = match self.eth_get_transaction_count(own_address).await {
+            Ok(val) => val,
+            Err(e) => return Err(e),
+        };
 
-        let props = gas_price.join3(gas_limit, transaction_count);
+        let transaction = Transaction {
+            to: to_address,
+            nonce,
+            gas_price,
+            gas_limit,
+            value,
+            data,
+            signature: None,
+        };
 
-        Box::new(
-            props
-                .and_then(move |(gas_price, gas_limit, nonce)| {
-                    let transaction = Transaction {
-                        to: to_address,
-                        nonce,
-                        gas_price,
-                        gas_limit,
-                        value,
-                        data,
-                        signature: None,
-                    };
+        let transaction = transaction.sign(&secret, Some(network_id));
 
-                    let transaction = transaction.sign(&secret, Some(network_id));
-
-                    salf.eth_send_raw_transaction(
-                        transaction
-                            .to_bytes()
-                            .expect("transaction.to_bytes() failed"),
-                    )
-                })
-                .into_future(),
+        self.eth_send_raw_transaction(
+            transaction
+                .to_bytes()
+                .expect("transaction.to_bytes() failed"),
         )
+        .await
     }
 
     /// Sends a transaction which does not change blockchain state, usually to get information.
-    pub fn contract_call(
+    pub async fn contract_call(
         &self,
         contract_address: Address,
         sig: &str,
         tokens: &[Token],
         own_address: Address,
-    ) -> Box<dyn Future<Item = Vec<u8>, Error = Error>> {
-        let salf = self.clone();
+    ) -> Result<Vec<u8>, Error> {
+        let gas_price = match self.eth_gas_price().await {
+            Ok(val) => val,
+            Err(e) => return Err(e),
+        };
 
-        let props = salf
-            .eth_gas_price()
-            .join(salf.eth_get_transaction_count(own_address));
+        let nonce = match self.eth_get_transaction_count(own_address).await {
+            Ok(val) => val,
+            Err(e) => return Err(e),
+        };
 
         let payload = encode_call(sig, tokens);
 
-        Box::new(
-            props
-                .and_then(move |(gas_price, nonce)| {
-                    let transaction = TransactionRequest {
-                        from: Some(own_address),
-                        to: contract_address,
-                        nonce: Some(UnpaddedHex(nonce)),
-                        gas: None,
-                        gas_price: Some(UnpaddedHex(gas_price)),
-                        value: Some(UnpaddedHex(0u64.into())),
-                        data: Some(Data(payload)),
-                    };
+        let transaction = TransactionRequest {
+            from: Some(own_address),
+            to: contract_address,
+            nonce: Some(UnpaddedHex(nonce)),
+            gas: None,
+            gas_price: Some(UnpaddedHex(gas_price)),
+            value: Some(UnpaddedHex(0u64.into())),
+            data: Some(Data(payload)),
+        };
 
-                    salf.eth_call(transaction)
-                })
-                .and_then(|bytes| {
-                    let bytes = bytes.clone();
-                    Ok(bytes.0)
-                }),
-        )
+        let bytes = match self.eth_call(transaction).await {
+            Ok(val) => val,
+            Err(e) => return Err(e),
+        };
+        Ok(bytes.0)
     }
 
     /// Checks if an event has already happened.
-    pub fn check_for_event(
+    pub async fn check_for_event(
         &self,
         contract_address: Address,
         event: &str,
         topic1: Option<Vec<[u8; 32]>>,
         topic2: Option<Vec<[u8; 32]>>,
-    ) -> Box<dyn Future<Item = Option<Log>, Error = Error>> {
-        let salf = self.clone();
-
+    ) -> Result<Option<Log>, Error> {
         // Build a filter with specified topics
         let mut new_filter = NewFilter::default();
         new_filter.address = vec![contract_address];
@@ -321,31 +315,34 @@ impl Web3 {
             topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
         ]);
 
-        Box::new(salf.eth_get_logs(new_filter).and_then(|logs| {
+        match self.eth_get_logs(new_filter).await {
             // Assuming the latest log is at the head of the vec
-            Ok(logs.first().cloned())
-        }))
+            Ok(log) => Ok(log.first().cloned()),
+            Err(e) => Err(e),
+        }
     }
 
     /// Waits for a transaction with the given hash to show up on the chain
-    pub fn wait_for_transaction(
+    /// warning, this function can and will wait forever if it has to
+    pub async fn wait_for_transaction(
         &self,
         tx_hash: [u8; 32],
-    ) -> Box<dyn Future<Item = TransactionResponse, Error = Error>> {
-        let salf = self.clone();
-        let fut = Interval::new(Duration::from_secs(1))
-            .from_err()
-            .and_then(move |_| salf.eth_get_transaction_by_hash(tx_hash.into()))
-            .filter_map(move |maybe_tx| maybe_tx)
-            .into_future()
-            .map(|(v, _stream)| v.unwrap())
-            .map_err(|(e, _stream)| e);
-
-        Box::new(fut)
+    ) -> Result<TransactionResponse, Error> {
+        loop {
+            delay_for(Duration::from_secs(1)).await;
+            match self.eth_get_transaction_by_hash(tx_hash.into()).await {
+                Ok(maybe_transaction) => {
+                    if let Some(transaction) = maybe_transaction {
+                        return Ok(transaction);
+                    }
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     /// Same as wait_for_event, but doesn't use eth_newFilter
-    pub fn wait_for_event_alt<F: Fn(Log) -> bool + 'static>(
+    pub async fn wait_for_event_alt<F: Fn(Log) -> bool + 'static>(
         &self,
         contract_address: Address,
         event: &str,
@@ -353,9 +350,7 @@ impl Web3 {
         topic2: Option<Vec<[u8; 32]>>,
         topic3: Option<Vec<[u8; 32]>>,
         local_filter: F,
-    ) -> Box<dyn Future<Item = Log, Error = Error>> {
-        let salf = self.clone();
-
+    ) -> Result<Log, Error> {
         let new_filter = NewFilter {
             address: vec![contract_address],
             from_block: None,
@@ -368,31 +363,23 @@ impl Web3 {
             ]),
         };
 
-        Box::new(
-            Interval::new(Duration::from_secs(10))
-                .from_err()
-                .and_then({
-                    let salf = salf.clone();
-                    move |_| salf.eth_get_logs(new_filter.clone())
-                })
-                .filter_map(move |logs: Vec<Log>| {
-                    for log in logs {
-                        if local_filter(log.clone()) {
-                            return Some(log);
-                        }
-                    }
+        delay_for(Duration::from_secs(10)).await;
+        let logs = match self.eth_get_logs(new_filter.clone()).await {
+            Ok(logs) => logs,
+            Err(e) => return Err(e),
+        };
 
-                    None
-                })
-                .into_future()
-                .map(|(v, _stream)| v.unwrap())
-                .map_err(|(e, _stream)| e),
-        )
+        for log in logs {
+            if local_filter(log.clone()) {
+                return Ok(log);
+            }
+        }
+        Err(format_err!("Not found!"))
     }
 
     /// Sets up an event filter, waits for the event to happen, then removes the filter. Includes a
     /// local filter. If a captured event does not pass this filter, it is ignored.
-    pub fn wait_for_event<F: Fn(Log) -> bool + 'static>(
+    pub async fn wait_for_event<F: Fn(Log) -> bool + 'static>(
         &self,
         contract_address: Address,
         event: &str,
@@ -400,9 +387,7 @@ impl Web3 {
         topic2: Option<Vec<[u8; 32]>>,
         topic3: Option<Vec<[u8; 32]>>,
         local_filter: F,
-    ) -> Box<dyn Future<Item = Log, Error = Error>> {
-        let salf = self.clone();
-
+    ) -> Result<Log, Error> {
         let mut new_filter = NewFilter::default();
         new_filter.address = vec![contract_address];
         new_filter.from_block = None;
@@ -414,52 +399,50 @@ impl Web3 {
             topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
         ]);
 
-        Box::new(salf.eth_new_filter(new_filter).and_then(move |filter_id| {
-            Interval::new(Duration::from_secs(10))
-                .from_err()
-                .and_then({
-                    let filter_id = filter_id.clone();
-                    let salf = salf.clone();
-                    move |_| salf.eth_get_filter_changes(filter_id.clone())
-                })
-                .filter_map(move |logs: Vec<Log>| {
-                    for log in logs {
-                        if local_filter(log.clone()) {
-                            return Some(log);
-                        }
-                    }
+        let filter_id = match self.eth_new_filter(new_filter).await {
+            Ok(f) => f,
+            Err(e) => return Err(e),
+        };
 
-                    None
-                })
-                .into_future()
-                .map(|(v, _stream)| v.unwrap())
-                .map_err(|(e, _stream)| e)
-                .and_then(move |log| {
-                    salf.eth_uninstall_filter(filter_id).and_then(move |r| {
-                        ensure!(r, "Unable to properly uninstall filter");
-                        Ok(log)
-                    })
-                })
-        }))
+        delay_for(Duration::from_secs(10)).await;
+        let logs = match self.eth_get_filter_changes(filter_id.clone()).await {
+            Ok(changes) => changes,
+            Err(e) => return Err(e),
+        };
+        let mut found_log = None;
+        for log in logs {
+            if local_filter(log.clone()) {
+                found_log = Some(log);
+            }
+        }
+
+        if let Err(e) = self.eth_uninstall_filter(filter_id).await {
+            return Err(format_err!("Unable to properly uninstall filter {:?}", e));
+        }
+
+        match found_log {
+            Some(log) => Ok(log),
+            None => Err(format_err!("Not found!")),
+        }
     }
 }
 
 #[test]
 fn test_complex_response() {
-    use actix_web::actix::Arbiter;
-    use actix_web::actix::System;
+    use actix::Arbiter;
+    use actix::System;
     System::run(|| {
         let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-        let txid1 = "0x741c0f3a0edceedf8a26b3c376a80d13324918f4215b1a881fc43503a2813835"
+        let txid1 = "0x8b9ef028f99016cd3cb8d4168df7491a0bf44f08b678d37f63ab61e782c500ab"
             .parse()
             .unwrap();
-        Arbiter::spawn(web3.eth_get_transaction_by_hash(txid1).then(|val| {
+        Arbiter::spawn(async move {
+            let val = web3.eth_get_transaction_by_hash(txid1).await;
             let val = val.expect("Actix failure");
             let response = val.expect("Failed to parse transaction response");
             assert!(response.block_number.unwrap() > 10u32.into());
-
             System::current().stop();
-            Ok(())
-        }));
-    });
+        });
+    })
+    .expect("Actix failure");
 }
