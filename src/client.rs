@@ -6,7 +6,7 @@
 //!
 use crate::jsonrpc::client::HTTPClient;
 use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
-use crate::types::{Data, SendTxOption, UnpaddedHex};
+use crate::types::{ConciseBlock, Data, SendTxOption, UnpaddedHex};
 use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
@@ -131,15 +131,34 @@ impl Web3 {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
+                (format!("{:#x}", block_number), true),
+                self.timeout,
+            )
+            .await
+    }
+
+    pub async fn eth_get_concise_block_by_number(
+        &self,
+        block_number: Uint256,
+    ) -> Result<ConciseBlock, Error> {
+        self.jsonrpc_client
+            .request_method(
+                "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), false),
                 self.timeout,
             )
             .await
     }
 
-    pub async fn eth_get_latest_block(&self) -> Result<Block, Error> {
+    pub async fn eth_get_latest_block(&self) -> Result<ConciseBlock, Error> {
         self.jsonrpc_client
             .request_method("eth_getBlockByNumber", ("latest", false), self.timeout)
+            .await
+    }
+
+    pub async fn eth_get_latest_block_full(&self) -> Result<Block, Error> {
+        self.jsonrpc_client
+            .request_method("eth_getBlockByNumber", ("latest", true), self.timeout)
             .await
     }
 
@@ -441,6 +460,22 @@ fn test_complex_response() {
             let val = val.expect("Actix failure");
             let response = val.expect("Failed to parse transaction response");
             assert!(response.block_number.unwrap() > 10u32.into());
+            System::current().stop();
+        });
+    })
+    .expect("Actix failure");
+}
+
+#[test]
+fn test_block_response() {
+    use actix::Arbiter;
+    use actix::System;
+    System::run(|| {
+        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+        Arbiter::spawn(async move {
+            let val = web3.eth_get_latest_block().await;
+            let val = val.expect("Actix failure");
+            assert!(val.number > 10u32.into());
             System::current().stop();
         });
     })

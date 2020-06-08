@@ -176,7 +176,79 @@ impl From<Uint256> for UnpaddedHex {
 /// This struct currently only has the 'timestamp' field.
 #[derive(Serialize, Debug, Deserialize)]
 pub struct Block {
+    pub author: Address,
+    pub difficulty: Uint256,
+    #[serde(rename = "extraData")]
+    pub extra_data: Uint256,
+    #[serde(rename = "gasLimit")]
+    pub gas_limit: Uint256,
+    #[serde(rename = "gasUsed")]
+    pub gas_used: Uint256,
+    pub hash: Uint256,
+    #[serde(rename = "logsBloom")]
+    pub logs_bloom: Data,
+    pub miner: Address,
+    #[serde(rename = "mixHash")]
+    pub mix_hash: Uint256,
+    pub nonce: Uint256,
+    pub number: Uint256,
+    #[serde(rename = "parentHash")]
+    pub parent_hash: Uint256,
+    #[serde(rename = "receiptsRoot")]
+    pub receipts_root: Uint256,
+    #[serde(rename = "sealFields")]
+    pub seal_fields: Vec<Uint256>,
+    #[serde(rename = "sha3Uncles")]
+    pub sha3_uncles: Uint256,
+    pub size: Uint256,
+    #[serde(rename = "stateRoot")]
+    pub state_root: Uint256,
     pub timestamp: Uint256,
+    #[serde(rename = "totalDifficulty")]
+    pub total_difficulty: Uint256,
+    pub transactions: Vec<TransactionResponse>,
+    #[serde(rename = "transactionsRoot")]
+    pub transactions_root: Uint256,
+    pub uncles: Vec<Uint256>,
+}
+
+/// block with more concise tx hashes instead of full transactions
+#[derive(Serialize, Debug, Deserialize)]
+pub struct ConciseBlock {
+    pub author: Address,
+    pub difficulty: Uint256,
+    #[serde(rename = "extraData")]
+    pub extra_data: Uint256,
+    #[serde(rename = "gasLimit")]
+    pub gas_limit: Uint256,
+    #[serde(rename = "gasUsed")]
+    pub gas_used: Uint256,
+    pub hash: Uint256,
+    #[serde(rename = "logsBloom")]
+    pub logs_bloom: Data,
+    pub miner: Address,
+    #[serde(rename = "mixHash")]
+    pub mix_hash: Uint256,
+    pub nonce: Uint256,
+    pub number: Uint256,
+    #[serde(rename = "parentHash")]
+    pub parent_hash: Uint256,
+    #[serde(rename = "receiptsRoot")]
+    pub receipts_root: Uint256,
+    #[serde(rename = "sealFields")]
+    pub seal_fields: Vec<Uint256>,
+    #[serde(rename = "sha3Uncles")]
+    pub sha3_uncles: Uint256,
+    pub size: Uint256,
+    #[serde(rename = "stateRoot")]
+    pub state_root: Uint256,
+    pub timestamp: Uint256,
+    #[serde(rename = "totalDifficulty")]
+    pub total_difficulty: Uint256,
+    pub transactions: Vec<Uint256>,
+    #[serde(rename = "transactionsRoot")]
+    pub transactions_root: Uint256,
+    pub uncles: Vec<Uint256>,
 }
 
 /// Used to configure send_transaction
@@ -190,7 +262,7 @@ pub enum SendTxOption {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
+    use std::fs::read_to_string;
 
     #[test]
     fn decode_log() {
@@ -217,44 +289,49 @@ mod tests {
     }
 
     #[test]
-    fn decode_block() {
-        let original = r#"{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "difficulty": "0x6c32fa8089ec4",
-    "extraData": "0x5050594520737061726b706f6f6c2d6574682d636e2d687a",
-    "gasLimit": "0x7a121d",
-    "gasUsed": "0x41e026",
-    "hash": "0x1539b836d40adc72e3cc3d6b2aabe55c4347c7bfb68e09020ea6ebd95a65b434",
-    "logsBloom": "0x0000080000002010010000090021002160110040401020820048403000040000882000001010440800020108010000000300000000820070028408000050000180016480b003804184000208411100500800080002080204a00002100100003801090001060002020008a00000020800204040820010329041000011000000880912021100000044004000000025840800190a0000001000264880080100240000808000100092000004500001008404088000010011200080102000200000e0100c1102000000000000000800040004000c800001001004b1022000804070010800208201451000200c208c000080c0202021410040d0020008000016000004",
+    fn decode_block_concise() {
+        let original = r#"
+{
+    "author": "0x5a0b54d5dc17e0aadc383d2db43b0a0d3e029c4c",
+    "difficulty": "0x857744c52180e",
+    "extraData": "0x6574682d70726f2d687a682d74303032",
+    "gasLimit": "0x98700f",
+    "gasUsed": "0x983ace",
+    "hash": "0xab18cc7cc1ed62252fc5f12b73a2d336c4b90f45855b1ac1de375898aa77695c",
+    "logsBloom": "0x9a224020268280ae20cc8401e6a98480625710800c53260c84112180303b9c40440422003a08746c024579423410434082061d14cc0184a19bc6d465d97c642e420890f5a008c4918a0831d801aa0df30028294402c3600118c697d88045b021bc361305d21222001d7438481044d9c427427f46b84514242b40c9120b12229c884e308b11808d1080d2004dc81902289163118d4dec8278f04b414a01541294a383001ac1c0201258650e921406882e1197104aacf80b70202444299a00018104096a0221b0040810169145058835081b0412452428f21404264893ec61a0120c1a2081d8241044d01302f4a13084a4112228c064fa0448440228450d000289",
     "miner": "0x5a0b54d5dc17e0aadc383d2db43b0a0d3e029c4c",
-    "mixHash": "0x2d8faa3690ec380b8c4ce5ffd6df444b8e532ddceb87a69890482af1137289e6",
-    "nonce": "0xa2d323400067995d",
-    "number": "0x753ddd",
-    "parentHash": "0xa68a4b2c0e47201aef3729055a0c01a74fa0ecf59ddde6cc0111d897442dd830",
-    "receiptsRoot": "0x3b536e11afd70f5b893619f2aa1401c1388579a63dabd149172b2b50e63d2c2a",
-    "sha3Uncles": "0x7338c4e69477e51b91b693a7241903033331b693750e92b619139b1468d68eb4",
-    "size": "0x14a8",
-    "stateRoot": "0x3b39c0bd303e9c135c6648890175b697a274f7ad3a25d3b6804d6744ae7dc226",
-    "timestamp": "0x5ccb4648",
-    "totalDifficulty": "0x220b1c200879e319650",
-    "transactions": [
-      "0xb474e6dd57954812bf2e8dd9f02c03f2e93623097a7f375bdc26d31ce4b09af7"
+    "mixHash": "0x7875d003e13d6d519700e9c859b3bac2a3269bff54730db80b0eb115cc7ff66b",
+    "nonce": "0xa5b9444000e3b9b6",
+    "number": "0x9c0a2a",
+    "parentHash": "0x9b4b4e0035143fdf83020e7cb5a7e92ad17d0f33d28dc4f2b33a8c8c20f8ffa9",
+    "receiptsRoot": "0xedee082e0a3f9f746091946a669afe00fd715be350e4b65f6017371c275d7d6c",
+    "sealFields": [
+      "0xa07875d003e13d6d519700e9c859b3bac2a3269bff54730db80b0eb115cc7ff66b",
+      "0x88a5b9444000e3b9b6"
     ],
-    "transactionsRoot": "0x8a42d36e3b8cd391879a2c26c9649a0e55425799e071abc2211161442ed249be",
-    "uncles": [
-      "0x0ee490b22ceeffa818df767b5c5e9db0ea11620a7c948de008a52cb9df1b3725"
-    ]
-  }
-}"#;
+    "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "size": "0x9162",
+    "stateRoot": "0x1b63e35e6660ca519923caa659124f75018a43c52c988dbb0259917e06ace28c",
+    "timestamp": "0x5ede683f",
+    "totalDifficulty": "0x35816e51ca117f27581",
+    "transactions": [
+      "0x326502312ba1279d08e7d86366436dd776700ff2eb75ec19e4800c5ad0c39459",
+      "0x8bf3b8ec5d56b7161dc267582b1630ee934eb2cc44ec9e0dc88944bd7b3f18de",
+      "0x679c58277d25b7bf8bcce236e1283dc4df5f5169d8c1325912e33ff8cb48c528",
+      "0xe8b43247336722353eb32d5817f8bf1f01eadd71b74ff9fb23fd1320af8a16c2",
+      "0xec7aa694f24f8a066c2ceb3a3bde17fd25171d4e4a345b177d702efe8c073963"
+    ],
+    "transactionsRoot": "0x575a82c7b35408d0894203d6af648f27575bab4d9dcca6772c017b9e06dfb75f",
+    "uncles": []
+}
+"#;
+        let _decoded: ConciseBlock = serde_json::from_str(original).unwrap();
+    }
 
-        let value_from_string: Value = serde_json::from_str(original).unwrap();
+    #[test]
+    fn decode_block() {
+        let file = read_to_string("test_files/complete_block").expect("Failed to read test files!");
 
-        let decoded: TransactionResponse = serde_json::from_str(original).unwrap();
-
-        let value_from_struct: Value = serde_json::to_value(&decoded).unwrap();
-
-        assert_json_include!(actual: value_from_string, expected: value_from_struct);
+        let _decoded: Block = serde_json::from_str(&file).unwrap();
     }
 }
