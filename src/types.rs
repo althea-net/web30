@@ -173,7 +173,7 @@ impl From<Uint256> for UnpaddedHex {
     }
 }
 
-/// This struct currently only has the 'timestamp' field.
+/// Ethereum block
 #[derive(Serialize, Debug, Deserialize)]
 pub struct Block {
     pub author: Address,
@@ -203,6 +203,44 @@ pub struct Block {
     pub size: Uint256,
     #[serde(rename = "stateRoot")]
     pub state_root: Uint256,
+    pub timestamp: Uint256,
+    #[serde(rename = "totalDifficulty")]
+    pub total_difficulty: Uint256,
+    pub transactions: Vec<TransactionResponse>,
+    #[serde(rename = "transactionsRoot")]
+    pub transactions_root: Uint256,
+    pub uncles: Vec<Uint256>,
+}
+
+/// Xdai block
+#[derive(Serialize, Debug, Deserialize)]
+pub struct XdaiBlock {
+    pub author: Address,
+    pub difficulty: Uint256,
+    #[serde(rename = "extraData")]
+    pub extra_data: Uint256,
+    #[serde(rename = "gasLimit")]
+    pub gas_limit: Uint256,
+    #[serde(rename = "gasUsed")]
+    pub gas_used: Uint256,
+    pub hash: Uint256,
+    #[serde(rename = "logsBloom")]
+    pub logs_bloom: Data,
+    pub miner: Address,
+    pub number: Uint256,
+    #[serde(rename = "parentHash")]
+    pub parent_hash: Uint256,
+    #[serde(rename = "receiptsRoot")]
+    pub receipts_root: Uint256,
+    #[serde(rename = "sealFields")]
+    pub seal_fields: Vec<Uint256>,
+    #[serde(rename = "sha3Uncles")]
+    pub sha3_uncles: Uint256,
+    pub signature: String,
+    pub size: Uint256,
+    #[serde(rename = "stateRoot")]
+    pub state_root: Uint256,
+    pub step: Uint256,
     pub timestamp: Uint256,
     #[serde(rename = "totalDifficulty")]
     pub total_difficulty: Uint256,
@@ -242,6 +280,44 @@ pub struct ConciseBlock {
     pub size: Uint256,
     #[serde(rename = "stateRoot")]
     pub state_root: Uint256,
+    pub timestamp: Uint256,
+    #[serde(rename = "totalDifficulty")]
+    pub total_difficulty: Uint256,
+    pub transactions: Vec<Uint256>,
+    #[serde(rename = "transactionsRoot")]
+    pub transactions_root: Uint256,
+    pub uncles: Vec<Uint256>,
+}
+
+/// Xdai block with more concise tx hashes instead of full transactions
+#[derive(Serialize, Debug, Deserialize)]
+pub struct ConciseXdaiBlock {
+    pub author: Address,
+    pub difficulty: Uint256,
+    #[serde(rename = "extraData")]
+    pub extra_data: Uint256,
+    #[serde(rename = "gasLimit")]
+    pub gas_limit: Uint256,
+    #[serde(rename = "gasUsed")]
+    pub gas_used: Uint256,
+    pub hash: Uint256,
+    #[serde(rename = "logsBloom")]
+    pub logs_bloom: Data,
+    pub miner: Address,
+    pub number: Uint256,
+    #[serde(rename = "parentHash")]
+    pub parent_hash: Uint256,
+    #[serde(rename = "receiptsRoot")]
+    pub receipts_root: Uint256,
+    #[serde(rename = "sealFields")]
+    pub seal_fields: Vec<Uint256>,
+    #[serde(rename = "sha3Uncles")]
+    pub sha3_uncles: Uint256,
+    pub signature: String,
+    pub size: Uint256,
+    #[serde(rename = "stateRoot")]
+    pub state_root: Uint256,
+    pub step: Uint256,
     pub timestamp: Uint256,
     #[serde(rename = "totalDifficulty")]
     pub total_difficulty: Uint256,
@@ -326,6 +402,40 @@ mod tests {
 }
 "#;
         let _decoded: ConciseBlock = serde_json::from_str(original).unwrap();
+    }
+
+    #[test]
+    fn decode_xdai_block_concise() {
+        let original = r#"
+{
+    "author": "0xb76756f95a9fb6ff9ad3e6cb41b734c1bd805103",
+    "difficulty": "0xfffffffffffffffffffffffffffffffe",
+    "extraData": "0xde830207028f5061726974792d457468657265756d86312e34312e30826c69",
+    "gasLimit": "0x989680",
+    "gasUsed": "0x0",
+    "hash": "0xee0bcfc930d4481c945c1ad63d8ea2b09b9214544736a21c1e6682c2a41103e9",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "miner": "0xb76756f95a9fb6ff9ad3e6cb41b734c1bd805103",
+    "number": "0x9c0a2a",
+    "parentHash": "0xac3a6c20e924a36553af671e47ee7d5fa807fe9fe82f3c8781eac4f67fc312b2",
+    "receiptsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "sealFields": [
+      "0x8412f799f1",
+      "0xb84164f1672483581db09090b4e8462085cc16d23d21572886e86db314adfe1044e519103df48f3b7d521fc98220ba4401b610d1420b9fdee434adeaacc7a642f20000"
+    ],
+    "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "signature": "64f1672483581db09090b4e8462085cc16d23d21572886e86db314adfe1044e519103df48f3b7d521fc98220ba4401b610d1420b9fdee434adeaacc7a642f20000",
+    "size": "0x24c",
+    "stateRoot": "0xaf196ea8d73362ee5cba1f30c1705e50f2bb45bc3b9e81dbf86fe5449df5b00d",
+    "step": "318216689",
+    "timestamp": "0x5ed601b5",
+    "totalDifficulty": "0x9c0a29ffffffffffffffffffffffffec6e5be5",
+    "transactions": [],
+    "transactionsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+    "uncles": []
+}
+"#;
+        let _decoded: ConciseXdaiBlock = serde_json::from_str(original).unwrap();
     }
 
     #[test]

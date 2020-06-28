@@ -51,8 +51,14 @@ impl HTTPClient {
             .timeout(timeout)
             .send_json(&payload)
             .await;
-        let mut res = res.unwrap();
-        let res: Response<R> = res.json().await.unwrap();
+        let mut res = match res {
+            Ok(val) => val,
+            Err(e) => bail!("Failed sending web3 request with {:?}", e),
+        };
+        let res: Response<R> = match res.json().await {
+            Ok(val) => val,
+            Err(e) => bail!("Got unexpected web3 response {:?}", e),
+        };
         //Response<R>
         trace!("got web3 response {:#?}", res);
         let data = res.data.into_result();
