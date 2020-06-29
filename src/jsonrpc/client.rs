@@ -37,12 +37,20 @@ impl HTTPClient {
         method: &str,
         params: T,
         timeout: Duration,
+        request_size_limit: Option<usize>,
     ) -> Result<R, Error>
     where
         for<'de> R: Deserialize<'de>,
         // T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
+        // the payload size limit for this request, almost everything
+        // will set this to None, and get the default 64k, but some requests
+        // need bigger buffers (like full block requests)
+        let limit = match request_size_limit {
+            Some(val) => val,
+            None => 65536,
+        };
         let payload = Request::new(self.next_id(), method, params);
         let res = self
             .client
@@ -55,7 +63,7 @@ impl HTTPClient {
             Ok(val) => val,
             Err(e) => bail!("Failed sending web3 request with {:?}", e),
         };
-        let res: Response<R> = match res.json().await {
+        let res: Response<R> = match res.json().limit(limit).await {
             Ok(val) => val,
             Err(e) => bail!("Got unexpected web3 response {:?}", e),
         };

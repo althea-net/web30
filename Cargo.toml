@@ -15,7 +15,7 @@ num256 = "0.2"
 futures-timer = "3"
 futures = "0.3"
 failure = "0.1"
-actix-web = {version = "2.0",  default-features = false, features=["openssl"]}
+actix-web = {version = "2",  default-features = false, features=["openssl", "compress"]}
 tokio = {version = "0.2", features=["macros"]}
 actix = "0.9"
 log = "0.4"

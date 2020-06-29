@@ -106,7 +106,7 @@ pub struct TransactionResponse {
     /// the number of transactions made by the sender prior to this one.
     pub nonce: Uint256,
     /// address of the receiver. null when its a contract creation transaction.
-    pub to: Address,
+    pub to: Option<Address>,
     /// integer of the transaction's index position in the block. null when its pending.
     #[serde(rename = "transactionIndex")]
     pub transaction_index: Uint256,
@@ -441,8 +441,17 @@ mod tests {
 
     #[test]
     fn decode_block() {
-        let file = read_to_string("test_files/complete_block").expect("Failed to read test files!");
+        let file =
+            read_to_string("test_files/complete_eth_block").expect("Failed to read test files!");
 
         let _decoded: Block = serde_json::from_str(&file).unwrap();
+    }
+
+    #[test]
+    fn decode_xdai_block() {
+        let file =
+            read_to_string("test_files/complete_xdai_block").expect("Failed to read test files!");
+
+        let _decoded: XdaiBlock = serde_json::from_str(&file).unwrap();
     }
 }

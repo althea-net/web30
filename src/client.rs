@@ -39,17 +39,17 @@ impl Web3 {
 
     pub async fn eth_accounts(&self) -> Result<Vec<Address>, Error> {
         self.jsonrpc_client
-            .request_method("eth_accounts", Vec::<String>::new(), self.timeout)
+            .request_method("eth_accounts", Vec::<String>::new(), self.timeout, None)
             .await
     }
     pub async fn net_version(&self) -> Result<String, Error> {
         self.jsonrpc_client
-            .request_method("net_version", Vec::<String>::new(), self.timeout)
+            .request_method("net_version", Vec::<String>::new(), self.timeout, None)
             .await
     }
     pub async fn eth_new_filter(&self, new_filter: NewFilter) -> Result<Uint256, Error> {
         self.jsonrpc_client
-            .request_method("eth_newFilter", vec![new_filter], self.timeout)
+            .request_method("eth_newFilter", vec![new_filter], self.timeout, None)
             .await
     }
     pub async fn eth_get_filter_changes(&self, filter_id: Uint256) -> Result<Vec<Log>, Error> {
@@ -58,6 +58,7 @@ impl Web3 {
                 "eth_getFilterChanges",
                 vec![format!("{:#x}", filter_id.clone())],
                 self.timeout,
+                None,
             )
             .await
     }
@@ -67,13 +68,14 @@ impl Web3 {
                 "eth_uninstallFilter",
                 vec![format!("{:#x}", filter_id.clone())],
                 self.timeout,
+                None,
             )
             .await
     }
 
     pub async fn eth_get_logs(&self, new_filter: NewFilter) -> Result<Vec<Log>, Error> {
         self.jsonrpc_client
-            .request_method("eth_getLogs", vec![new_filter], self.timeout)
+            .request_method("eth_getLogs", vec![new_filter], self.timeout, None)
             .await
     }
 
@@ -83,12 +85,13 @@ impl Web3 {
                 "eth_getTransactionCount",
                 vec![address.to_string(), "pending".to_string()],
                 self.timeout,
+                None,
             )
             .await
     }
     pub async fn eth_gas_price(&self) -> Result<Uint256, Error> {
         self.jsonrpc_client
-            .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout)
+            .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout, None)
             .await
     }
     pub async fn eth_estimate_gas(
@@ -96,7 +99,7 @@ impl Web3 {
         transaction: TransactionRequest,
     ) -> Result<Uint256, Error> {
         self.jsonrpc_client
-            .request_method("eth_estimateGas", vec![transaction], self.timeout)
+            .request_method("eth_estimateGas", vec![transaction], self.timeout, None)
             .await
     }
     pub async fn eth_get_balance(&self, address: Address) -> Result<Uint256, Error> {
@@ -105,6 +108,7 @@ impl Web3 {
                 "eth_getBalance",
                 vec![address.to_string(), "latest".to_string()],
                 self.timeout,
+                None,
             )
             .await
     }
@@ -113,17 +117,17 @@ impl Web3 {
         transactions: Vec<TransactionRequest>,
     ) -> Result<Uint256, Error> {
         self.jsonrpc_client
-            .request_method("eth_sendTransaction", transactions, self.timeout)
+            .request_method("eth_sendTransaction", transactions, self.timeout, None)
             .await
     }
     pub async fn eth_call(&self, transaction: TransactionRequest) -> Result<Data, Error> {
         self.jsonrpc_client
-            .request_method("eth_call", (transaction, "latest"), self.timeout)
+            .request_method("eth_call", (transaction, "latest"), self.timeout, None)
             .await
     }
     pub async fn eth_block_number(&self) -> Result<Uint256, Error> {
         self.jsonrpc_client
-            .request_method("eth_blockNumber", Vec::<String>::new(), self.timeout)
+            .request_method("eth_blockNumber", Vec::<String>::new(), self.timeout, None)
             .await
     }
 
@@ -133,6 +137,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), true),
                 self.timeout,
+                Some(5_000_000),
             )
             .await
     }
@@ -146,6 +151,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), true),
                 self.timeout,
+                Some(5_000_000),
             )
             .await
     }
@@ -159,6 +165,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), false),
                 self.timeout,
+                None,
             )
             .await
     }
@@ -172,31 +179,52 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), false),
                 self.timeout,
+                None,
             )
             .await
     }
 
     pub async fn eth_get_latest_block(&self) -> Result<ConciseBlock, Error> {
         self.jsonrpc_client
-            .request_method("eth_getBlockByNumber", ("latest", false), self.timeout)
+            .request_method(
+                "eth_getBlockByNumber",
+                ("latest", false),
+                self.timeout,
+                None,
+            )
             .await
     }
 
     pub async fn xdai_get_latest_block(&self) -> Result<ConciseXdaiBlock, Error> {
         self.jsonrpc_client
-            .request_method("eth_getBlockByNumber", ("latest", false), self.timeout)
+            .request_method(
+                "eth_getBlockByNumber",
+                ("latest", false),
+                self.timeout,
+                None,
+            )
             .await
     }
 
     pub async fn eth_get_latest_block_full(&self) -> Result<Block, Error> {
         self.jsonrpc_client
-            .request_method("eth_getBlockByNumber", ("latest", true), self.timeout)
+            .request_method(
+                "eth_getBlockByNumber",
+                ("latest", true),
+                self.timeout,
+                Some(5_000_000),
+            )
             .await
     }
 
     pub async fn xdai_get_latest_block_full(&self) -> Result<XdaiBlock, Error> {
         self.jsonrpc_client
-            .request_method("eth_getBlockByNumber", ("latest", true), self.timeout)
+            .request_method(
+                "eth_getBlockByNumber",
+                ("latest", true),
+                self.timeout,
+                Some(5_000_000),
+            )
             .await
     }
 
@@ -206,6 +234,7 @@ impl Web3 {
                 "eth_sendRawTransaction",
                 vec![format!("0x{}", bytes_to_hex_str(&data))],
                 self.timeout,
+                None,
             )
             .await
     }
@@ -220,12 +249,13 @@ impl Web3 {
                 // returning it we'll keep it consistent.
                 vec![format!("{:#066x}", hash)],
                 self.timeout,
+                None,
             )
             .await
     }
     pub async fn evm_snapshot(&self) -> Result<Uint256, Error> {
         self.jsonrpc_client
-            .request_method("evm_snapshot", Vec::<String>::new(), self.timeout)
+            .request_method("evm_snapshot", Vec::<String>::new(), self.timeout, None)
             .await
     }
     pub async fn evm_revert(&self, snapshot_id: Uint256) -> Result<Uint256, Error> {
@@ -234,6 +264,7 @@ impl Web3 {
                 "evm_revert",
                 vec![format!("{:#066x}", snapshot_id)],
                 self.timeout,
+                None,
             )
             .await
     }
