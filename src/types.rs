@@ -27,7 +27,7 @@ where
     hex_str_to_bytes(&s).map_err(serde::de::Error::custom)
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct Log {
     /// true when the log was removed, due to a chain reorganization. false if its a valid log.
     pub removed: Option<bool>,
@@ -59,7 +59,7 @@ pub struct Log {
     pub type_: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq)]
 pub struct Data(
     #[serde(
         serialize_with = "data_serialize",
@@ -84,7 +84,7 @@ impl From<Vec<u8>> for Data {
 /// As received by getTransactionByHash
 ///
 /// See more: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_gettransactionbyhash
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
 pub struct TransactionResponse {
     /// hash of the block where this transaction was in. null when its pending.
     #[serde(rename = "blockHash")]
@@ -131,7 +131,7 @@ pub struct NewFilter {
     pub topics: Option<Vec<Option<Vec<Option<String>>>>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Eq, PartialEq)]
 pub struct TransactionRequest {
     //The address the transaction is send from.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -156,6 +156,7 @@ pub struct TransactionRequest {
     pub nonce: Option<UnpaddedHex>,
 }
 
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct UnpaddedHex(pub Uint256);
 
 impl Serialize for UnpaddedHex {
@@ -174,7 +175,7 @@ impl From<Uint256> for UnpaddedHex {
 }
 
 /// Ethereum block
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Block {
     pub author: Address,
     pub difficulty: Uint256,
@@ -213,7 +214,7 @@ pub struct Block {
 }
 
 /// Xdai block
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct XdaiBlock {
     pub author: Address,
     pub difficulty: Uint256,
@@ -251,7 +252,7 @@ pub struct XdaiBlock {
 }
 
 /// block with more concise tx hashes instead of full transactions
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct ConciseBlock {
     pub author: Address,
     pub difficulty: Uint256,
@@ -290,7 +291,7 @@ pub struct ConciseBlock {
 }
 
 /// Xdai block with more concise tx hashes instead of full transactions
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct ConciseXdaiBlock {
     pub author: Address,
     pub difficulty: Uint256,
