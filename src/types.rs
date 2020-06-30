@@ -2,7 +2,7 @@ use clarity::utils::{bytes_to_hex_str, hex_str_to_bytes};
 use clarity::Address;
 use num256::Uint256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::ops::Deref;
+use std::{cmp::Ordering, ops::Deref};
 
 /// Serializes slice of data as "UNFORMATTED DATA" format required
 /// by Ethereum JSONRPC API.
@@ -59,7 +59,7 @@ pub struct Log {
     pub type_: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Data(
     #[serde(
         serialize_with = "data_serialize",
@@ -84,7 +84,7 @@ impl From<Vec<u8>> for Data {
 /// As received by getTransactionByHash
 ///
 /// See more: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_gettransactionbyhash
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct TransactionResponse {
     /// hash of the block where this transaction was in. null when its pending.
     #[serde(rename = "blockHash")]
@@ -109,7 +109,7 @@ pub struct TransactionResponse {
     pub to: Option<Address>,
     /// integer of the transaction's index position in the block. null when its pending.
     #[serde(rename = "transactionIndex")]
-    pub transaction_index: Uint256,
+    pub transaction_index: Option<Uint256>,
     /// value transferred in Wei.
     pub value: Uint256,
     /// ECDSA recovery id
@@ -118,6 +118,33 @@ pub struct TransactionResponse {
     pub r: Uint256,
     /// ECDSA signature s
     pub s: Uint256,
+}
+
+impl Ord for TransactionResponse {
+    /// the goal of this ordering is to sort transactions by their block number,
+    /// in the case of transactions in the same block or transactions without a block
+    /// number transactions without a block are lesser than transactions with one and
+    /// are sorted by nonce when in the same block or without a block.
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.block_number.clone(), other.block_number.clone()) {
+            (Some(self_block), Some(other_block)) => {
+                if self_block != other_block {
+                    self_block.cmp(&other_block)
+                } else {
+                    self.nonce.cmp(&other.nonce)
+                }
+            }
+            (Some(_), None) => Ordering::Greater,
+            (None, Some(_)) => Ordering::Less,
+            (None, None) => self.nonce.cmp(&other.nonce),
+        }
+    }
+}
+
+impl PartialOrd for TransactionResponse {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Serialize, Default, Debug, Clone)]
