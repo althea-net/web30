@@ -123,7 +123,7 @@ pub struct TransactionResponse {
 impl Ord for TransactionResponse {
     /// the goal of this ordering is to sort transactions by their block number,
     /// in the case of transactions in the same block or transactions without a block
-    /// number transactions without a block are lesser than transactions with one and
+    /// number transactions without a block are greater than transactions with one and
     /// are sorted by nonce when in the same block or without a block.
     fn cmp(&self, other: &Self) -> Ordering {
         match (self.block_number.clone(), other.block_number.clone()) {
@@ -134,8 +134,8 @@ impl Ord for TransactionResponse {
                     self.nonce.cmp(&other.nonce)
                 }
             }
-            (Some(_), None) => Ordering::Greater,
-            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
             (None, None) => self.nonce.cmp(&other.nonce),
         }
     }
