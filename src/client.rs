@@ -284,6 +284,7 @@ impl Web3 {
         let mut gas_price_multiplier = 1u64.into();
         let mut gas_limit = None;
         let mut network_id = 1u64;
+        let our_balance = self.eth_get_balance(own_address).await?;
 
         for option in options {
             match option {
@@ -294,14 +295,10 @@ impl Web3 {
             }
         }
 
-        let gas_price = if let Some(gp) = gas_price {
+        let mut gas_price = if let Some(gp) = gas_price {
             gp
         } else {
-            let gp = self.eth_gas_price().await;
-            match gp {
-                Ok(gp) => gp * gas_price_multiplier,
-                Err(e) => return Err(e),
-            }
+            self.eth_gas_price().await? * gas_price_multiplier
         };
 
         let gas_limit = if let Some(gl) = gas_limit {
@@ -318,16 +315,17 @@ impl Web3 {
                     data: Some(data.clone().into()),
                 })
                 .await;
-            match res {
-                Ok(r) => r,
-                Err(e) => return Err(e),
-            }
+            res?
         };
 
-        let nonce = match self.eth_get_transaction_count(own_address).await {
-            Ok(val) => val,
-            Err(e) => return Err(e),
-        };
+        // this is an edge case where we are about to send a transaction that can't possibly
+        // be valid, we simply don't have the the funds to pay the full gas amount we are promising
+        // in this case we reduce the gas price to exactly what we can afford.
+        if gas_price.clone() * gas_limit.clone() > our_balance {
+            gas_price = our_balance / gas_limit.clone();
+        }
+
+        let nonce = self.eth_get_transaction_count(own_address).await?;
 
         let transaction = Transaction {
             to: to_address,
