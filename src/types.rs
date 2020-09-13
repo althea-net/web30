@@ -2,6 +2,7 @@ use clarity::utils::{bytes_to_hex_str, hex_str_to_bytes};
 use clarity::Address;
 use num256::Uint256;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::str::FromStr;
 use std::{cmp::Ordering, ops::Deref};
 
 /// Serializes slice of data as "UNFORMATTED DATA" format required
@@ -206,8 +207,11 @@ impl From<Uint256> for UnpaddedHex {
 pub struct Block {
     pub author: Address,
     pub difficulty: Uint256,
-    #[serde(rename = "extraData")]
-    pub extra_data: String,
+    #[serde(
+        rename = "extraData",
+        deserialize_with = "parse_possibly_empty_hex_val"
+    )]
+    pub extra_data: Uint256,
     #[serde(rename = "gasLimit")]
     pub gas_limit: Uint256,
     #[serde(rename = "gasUsed")]
@@ -245,7 +249,10 @@ pub struct Block {
 pub struct XdaiBlock {
     pub author: Address,
     pub difficulty: Uint256,
-    #[serde(rename = "extraData")]
+    #[serde(
+        rename = "extraData",
+        deserialize_with = "parse_possibly_empty_hex_val"
+    )]
     pub extra_data: Uint256,
     #[serde(rename = "gasLimit")]
     pub gas_limit: Uint256,
@@ -283,7 +290,10 @@ pub struct XdaiBlock {
 pub struct ConciseBlock {
     pub author: Address,
     pub difficulty: Uint256,
-    #[serde(rename = "extraData")]
+    #[serde(
+        rename = "extraData",
+        deserialize_with = "parse_possibly_empty_hex_val"
+    )]
     pub extra_data: Uint256,
     #[serde(rename = "gasLimit")]
     pub gas_limit: Uint256,
@@ -361,6 +371,17 @@ pub enum SendTxOption {
     GasPriceMultiplier(Uint256),
     GasLimit(Uint256),
     NetworkId(u64),
+}
+
+fn parse_possibly_empty_hex_val<'de, D>(deserializer: D) -> Result<Uint256, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: String = String::deserialize(deserializer)?;
+    match Uint256::from_str(&s) {
+        Ok(val) => Ok(val),
+        Err(_e) => Ok(0u32.into()),
+    }
 }
 
 #[cfg(test)]
