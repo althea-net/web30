@@ -207,7 +207,7 @@ pub struct Block {
     pub author: Address,
     pub difficulty: Uint256,
     #[serde(rename = "extraData")]
-    pub extra_data: Uint256,
+    pub extra_data: String,
     #[serde(rename = "gasLimit")]
     pub gas_limit: Uint256,
     #[serde(rename = "gasUsed")]
@@ -366,7 +366,32 @@ pub enum SendTxOption {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::Web3;
+    use actix::{Arbiter, System};
     use std::fs::read_to_string;
+    use std::time::Duration;
+
+    /// This test is used to get new blocks for testing easily
+    #[test]
+    #[ignore]
+    fn test_arbitrary_block() {
+        let res = System::run(move || {
+            Arbiter::spawn(async move {
+                let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+                let res = web3.eth_get_block_by_number(10750715u32.into()).await;
+                if res.is_err() {
+                    println!("{:?}", res);
+                    System::current().stop_with_code(1);
+                }
+
+                System::current().stop();
+            });
+        });
+
+        if let Err(e) = res {
+            panic!(format!("{:?}", e))
+        }
+    }
 
     #[test]
     fn decode_log() {
@@ -470,6 +495,11 @@ mod tests {
     fn decode_block() {
         let file =
             read_to_string("test_files/complete_eth_block").expect("Failed to read test files!");
+
+        let _decoded: Block = serde_json::from_str(&file).unwrap();
+
+        let file =
+            read_to_string("test_files/eth_A40AFB_block").expect("Failed to read test files!");
 
         let _decoded: Block = serde_json::from_str(&file).unwrap();
     }
