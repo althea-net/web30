@@ -83,7 +83,7 @@ impl Web3 {
         self.jsonrpc_client
             .request_method(
                 "eth_getTransactionCount",
-                vec![address.to_string(), "pending".to_string()],
+                vec![address.to_string(), "latest".to_string()],
                 self.timeout,
                 None,
             )
@@ -527,6 +527,25 @@ fn test_complex_response() {
             let val = val.expect("Actix failure");
             let response = val.expect("Failed to parse transaction response");
             assert!(response.block_number.unwrap() > 10u32.into());
+            System::current().stop();
+        });
+    })
+    .expect("Actix failure");
+}
+
+#[test]
+fn test_transaction_count_response() {
+    use actix::Arbiter;
+    use actix::System;
+    System::run(|| {
+        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+        let address: Address = "0x04668ec2f57cc15c381b461b9fedab5d451c8f7f"
+            .parse()
+            .unwrap();
+        Arbiter::spawn(async move {
+            let val = web3.eth_get_transaction_count(address).await;
+            let val = val.unwrap();
+            assert!(val > 0u32.into());
             System::current().stop();
         });
     })
