@@ -527,6 +527,7 @@ impl Web3 {
 }
 
 #[test]
+#[ignore]
 fn test_complex_response() {
     use actix::Arbiter;
     use actix::System;

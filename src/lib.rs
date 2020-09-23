@@ -5,15 +5,13 @@ extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
+extern crate actix_web;
 extern crate clarity;
 extern crate futures;
 extern crate num256;
-extern crate actix_web;
-extern crate futures_timer;
 extern crate tokio;
 #[macro_use]
 extern crate log;
-extern crate bytes;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_json_diff;
