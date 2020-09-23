@@ -42,10 +42,12 @@ impl Web3 {
             .request_method("eth_accounts", Vec::<String>::new(), self.timeout, None)
             .await
     }
-    pub async fn net_version(&self) -> Result<String, Error> {
-        self.jsonrpc_client
+    pub async fn net_version(&self) -> Result<u64, Error> {
+        let ret: Result<String, Error> = self
+            .jsonrpc_client
             .request_method("net_version", Vec::<String>::new(), self.timeout, None)
-            .await
+            .await;
+        Ok(ret?.parse()?)
     }
     pub async fn eth_new_filter(&self, new_filter: NewFilter) -> Result<Uint256, Error> {
         self.jsonrpc_client
@@ -271,6 +273,13 @@ impl Web3 {
 
     /// Sends a transaction which changes blockchain state.
     /// `options` takes a vector of `SendTxOption` for configuration
+    /// unlike the lower level eth_send_transaction() this call builds
+    /// the transaction abstracting away details like chain id, gas,
+    /// and network id.
+    /// WARNING: you must specify networkID in situations where a single
+    /// node is operating no more than one chain. Otherwise it is possible
+    /// for the full node to trick the client into signing transactions
+    /// on unintended chains potentially to their benefit
     pub async fn send_transaction(
         &self,
         to_address: Address,
@@ -283,7 +292,7 @@ impl Web3 {
         let mut gas_price = None;
         let mut gas_price_multiplier = 1u64.into();
         let mut gas_limit = None;
-        let mut network_id = 1u64;
+        let mut network_id = None;
         let our_balance = self.eth_get_balance(own_address).await?;
 
         for option in options {
@@ -291,7 +300,7 @@ impl Web3 {
                 SendTxOption::GasPrice(gp) => gas_price = Some(gp),
                 SendTxOption::GasPriceMultiplier(gpm) => gas_price_multiplier = gpm,
                 SendTxOption::GasLimit(gl) => gas_limit = Some(gl),
-                SendTxOption::NetworkId(ni) => network_id = ni,
+                SendTxOption::NetworkId(ni) => network_id = Some(ni),
             }
         }
 
@@ -304,18 +313,22 @@ impl Web3 {
         let gas_limit = if let Some(gl) = gas_limit {
             gl
         } else {
-            let res = self
-                .eth_estimate_gas(TransactionRequest {
-                    from: None,
-                    to: to_address,
-                    nonce: None,
-                    gas_price: None,
-                    gas: None,
-                    value: Some(value.clone().into()),
-                    data: Some(data.clone().into()),
-                })
-                .await;
-            res?
+            self.eth_estimate_gas(TransactionRequest {
+                from: None,
+                to: to_address,
+                nonce: None,
+                gas_price: None,
+                gas: None,
+                value: Some(value.clone().into()),
+                data: Some(data.clone().into()),
+            })
+            .await?
+        };
+
+        let network_id = if let Some(ni) = network_id {
+            ni
+        } else {
+            self.net_version().await?
         };
 
         // this is an edge case where we are about to send a transaction that can't possibly
