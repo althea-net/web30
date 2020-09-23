@@ -5,12 +5,12 @@
 //! JSONRPC requests.
 //!
 use crate::jsonrpc::client::HTTPClient;
+use crate::jsonrpc::error::Web3Error;
 use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
 use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, UnpaddedHex, XdaiBlock};
 use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
-use failure::Error;
 use num256::Uint256;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,24 +37,24 @@ impl Web3 {
         }
     }
 
-    pub async fn eth_accounts(&self) -> Result<Vec<Address>, Error> {
+    pub async fn eth_accounts(&self) -> Result<Vec<Address>, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_accounts", Vec::<String>::new(), self.timeout, None)
             .await
     }
-    pub async fn net_version(&self) -> Result<u64, Error> {
-        let ret: Result<String, Error> = self
+    pub async fn net_version(&self) -> Result<u64, Web3Error> {
+        let ret: Result<String, Web3Error> = self
             .jsonrpc_client
             .request_method("net_version", Vec::<String>::new(), self.timeout, None)
             .await;
         Ok(ret?.parse()?)
     }
-    pub async fn eth_new_filter(&self, new_filter: NewFilter) -> Result<Uint256, Error> {
+    pub async fn eth_new_filter(&self, new_filter: NewFilter) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_newFilter", vec![new_filter], self.timeout, None)
             .await
     }
-    pub async fn eth_get_filter_changes(&self, filter_id: Uint256) -> Result<Vec<Log>, Error> {
+    pub async fn eth_get_filter_changes(&self, filter_id: Uint256) -> Result<Vec<Log>, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getFilterChanges",
@@ -64,7 +64,7 @@ impl Web3 {
             )
             .await
     }
-    pub async fn eth_uninstall_filter(&self, filter_id: Uint256) -> Result<bool, Error> {
+    pub async fn eth_uninstall_filter(&self, filter_id: Uint256) -> Result<bool, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_uninstallFilter",
@@ -75,13 +75,13 @@ impl Web3 {
             .await
     }
 
-    pub async fn eth_get_logs(&self, new_filter: NewFilter) -> Result<Vec<Log>, Error> {
+    pub async fn eth_get_logs(&self, new_filter: NewFilter) -> Result<Vec<Log>, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_getLogs", vec![new_filter], self.timeout, None)
             .await
     }
 
-    pub async fn eth_get_transaction_count(&self, address: Address) -> Result<Uint256, Error> {
+    pub async fn eth_get_transaction_count(&self, address: Address) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getTransactionCount",
@@ -91,7 +91,7 @@ impl Web3 {
             )
             .await
     }
-    pub async fn eth_gas_price(&self) -> Result<Uint256, Error> {
+    pub async fn eth_gas_price(&self) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout, None)
             .await
@@ -99,12 +99,12 @@ impl Web3 {
     pub async fn eth_estimate_gas(
         &self,
         transaction: TransactionRequest,
-    ) -> Result<Uint256, Error> {
+    ) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_estimateGas", vec![transaction], self.timeout, None)
             .await
     }
-    pub async fn eth_get_balance(&self, address: Address) -> Result<Uint256, Error> {
+    pub async fn eth_get_balance(&self, address: Address) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBalance",
@@ -117,23 +117,23 @@ impl Web3 {
     pub async fn eth_send_transaction(
         &self,
         transactions: Vec<TransactionRequest>,
-    ) -> Result<Uint256, Error> {
+    ) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_sendTransaction", transactions, self.timeout, None)
             .await
     }
-    pub async fn eth_call(&self, transaction: TransactionRequest) -> Result<Data, Error> {
+    pub async fn eth_call(&self, transaction: TransactionRequest) -> Result<Data, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_call", (transaction, "latest"), self.timeout, None)
             .await
     }
-    pub async fn eth_block_number(&self) -> Result<Uint256, Error> {
+    pub async fn eth_block_number(&self) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_blockNumber", Vec::<String>::new(), self.timeout, None)
             .await
     }
 
-    pub async fn eth_get_block_by_number(&self, block_number: Uint256) -> Result<Block, Error> {
+    pub async fn eth_get_block_by_number(&self, block_number: Uint256) -> Result<Block, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -147,7 +147,7 @@ impl Web3 {
     pub async fn xdai_get_block_by_number(
         &self,
         block_number: Uint256,
-    ) -> Result<XdaiBlock, Error> {
+    ) -> Result<XdaiBlock, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -161,7 +161,7 @@ impl Web3 {
     pub async fn eth_get_concise_block_by_number(
         &self,
         block_number: Uint256,
-    ) -> Result<ConciseBlock, Error> {
+    ) -> Result<ConciseBlock, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -175,7 +175,7 @@ impl Web3 {
     pub async fn xdai_get_concise_block_by_number(
         &self,
         block_number: Uint256,
-    ) -> Result<ConciseXdaiBlock, Error> {
+    ) -> Result<ConciseXdaiBlock, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -186,7 +186,7 @@ impl Web3 {
             .await
     }
 
-    pub async fn eth_get_latest_block(&self) -> Result<ConciseBlock, Error> {
+    pub async fn eth_get_latest_block(&self) -> Result<ConciseBlock, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -197,7 +197,7 @@ impl Web3 {
             .await
     }
 
-    pub async fn xdai_get_latest_block(&self) -> Result<ConciseXdaiBlock, Error> {
+    pub async fn xdai_get_latest_block(&self) -> Result<ConciseXdaiBlock, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -208,7 +208,7 @@ impl Web3 {
             .await
     }
 
-    pub async fn eth_get_latest_block_full(&self) -> Result<Block, Error> {
+    pub async fn eth_get_latest_block_full(&self) -> Result<Block, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -219,7 +219,7 @@ impl Web3 {
             .await
     }
 
-    pub async fn xdai_get_latest_block_full(&self) -> Result<XdaiBlock, Error> {
+    pub async fn xdai_get_latest_block_full(&self) -> Result<XdaiBlock, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getBlockByNumber",
@@ -230,7 +230,7 @@ impl Web3 {
             .await
     }
 
-    pub async fn eth_send_raw_transaction(&self, data: Vec<u8>) -> Result<Uint256, Error> {
+    pub async fn eth_send_raw_transaction(&self, data: Vec<u8>) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_sendRawTransaction",
@@ -243,7 +243,7 @@ impl Web3 {
     pub async fn eth_get_transaction_by_hash(
         &self,
         hash: Uint256,
-    ) -> Result<Option<TransactionResponse>, Error> {
+    ) -> Result<Option<TransactionResponse>, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "eth_getTransactionByHash",
@@ -255,12 +255,12 @@ impl Web3 {
             )
             .await
     }
-    pub async fn evm_snapshot(&self) -> Result<Uint256, Error> {
+    pub async fn evm_snapshot(&self) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("evm_snapshot", Vec::<String>::new(), self.timeout, None)
             .await
     }
-    pub async fn evm_revert(&self, snapshot_id: Uint256) -> Result<Uint256, Error> {
+    pub async fn evm_revert(&self, snapshot_id: Uint256) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method(
                 "evm_revert",
@@ -288,7 +288,7 @@ impl Web3 {
         own_address: Address,
         secret: PrivateKey,
         options: Vec<SendTxOption>,
-    ) -> Result<Uint256, Error> {
+    ) -> Result<Uint256, Web3Error> {
         let mut gas_price = None;
         let mut gas_price_multiplier = 1u64.into();
         let mut gas_limit = None;
@@ -367,7 +367,7 @@ impl Web3 {
         sig: &str,
         tokens: &[Token],
         own_address: Address,
-    ) -> Result<Vec<u8>, Error> {
+    ) -> Result<Vec<u8>, Web3Error> {
         let gas_price = match self.eth_gas_price().await {
             Ok(val) => val,
             Err(e) => return Err(e),
@@ -404,7 +404,7 @@ impl Web3 {
         event: &str,
         topic1: Option<Vec<[u8; 32]>>,
         topic2: Option<Vec<[u8; 32]>>,
-    ) -> Result<Option<Log>, Error> {
+    ) -> Result<Option<Log>, Web3Error> {
         // Build a filter with specified topics
         let mut new_filter = NewFilter::default();
         new_filter.address = vec![contract_address];
@@ -426,7 +426,7 @@ impl Web3 {
     pub async fn wait_for_transaction(
         &self,
         tx_hash: [u8; 32],
-    ) -> Result<TransactionResponse, Error> {
+    ) -> Result<TransactionResponse, Web3Error> {
         loop {
             delay_for(Duration::from_secs(1)).await;
             match self.eth_get_transaction_by_hash(tx_hash.into()).await {
@@ -449,7 +449,7 @@ impl Web3 {
         topic2: Option<Vec<[u8; 32]>>,
         topic3: Option<Vec<[u8; 32]>>,
         local_filter: F,
-    ) -> Result<Log, Error> {
+    ) -> Result<Log, Web3Error> {
         let new_filter = NewFilter {
             address: vec![contract_address],
             from_block: None,
@@ -473,7 +473,7 @@ impl Web3 {
                 return Ok(log);
             }
         }
-        Err(format_err!("Not found!"))
+        Err(Web3Error::EventNotFound(event.to_string()))
     }
 
     /// Sets up an event filter, waits for the event to happen, then removes the filter. Includes a
@@ -486,7 +486,7 @@ impl Web3 {
         topic2: Option<Vec<[u8; 32]>>,
         topic3: Option<Vec<[u8; 32]>>,
         local_filter: F,
-    ) -> Result<Log, Error> {
+    ) -> Result<Log, Web3Error> {
         let mut new_filter = NewFilter::default();
         new_filter.address = vec![contract_address];
         new_filter.from_block = None;
@@ -516,12 +516,12 @@ impl Web3 {
         }
 
         if let Err(e) = self.eth_uninstall_filter(filter_id).await {
-            return Err(format_err!("Unable to properly uninstall filter {:?}", e));
+            return Err(Web3Error::CouldNotRemoveFilter(format!("{}", e)));
         }
 
         match found_log {
             Some(log) => Ok(log),
-            None => Err(format_err!("Not found!")),
+            None => Err(Web3Error::EventNotFound(event.to_string())),
         }
     }
 }

@@ -14,7 +14,6 @@ clarity = "0.2"
 num256 = "0.3"
 futures-timer = "3"
 futures = "0.3"
-failure = "0.1"
 actix-web = {version = "3",  default-features = false, features=["openssl", "compress"]}
 tokio = {version = "0.2", features=["macros"]}
 actix = "0.10"

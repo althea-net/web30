@@ -1,8 +1,8 @@
+use crate::jsonrpc::error::Web3Error;
 use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
 use actix_web::client::Client;
 use actix_web::http::header;
-use failure::Error;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::str;
@@ -38,7 +38,7 @@ impl HTTPClient {
         params: T,
         timeout: Duration,
         request_size_limit: Option<usize>,
-    ) -> Result<R, Error>
+    ) -> Result<R, Web3Error>
     where
         for<'de> R: Deserialize<'de>,
         // T: std::fmt::Debug,
@@ -61,15 +61,22 @@ impl HTTPClient {
             .await;
         let mut res = match res {
             Ok(val) => val,
-            Err(e) => bail!("Failed sending web3 request with {:?}", e),
+            Err(e) => return Err(Web3Error::FailedToSend(e)),
         };
         let res: Response<R> = match res.json().limit(limit).await {
             Ok(val) => val,
-            Err(e) => bail!("Got unexpected web3 response {:?}", e),
+            Err(e) => return Err(Web3Error::BadResponse(format!("Web3 Error {}", e))),
         };
         //Response<R>
         trace!("got web3 response {:#?}", res);
         let data = res.data.into_result();
-        data.map_err(move |e| format_err!("JSONRPC Error {}: {}", e.code, e.message))
+        match data {
+            Ok(r) => Ok(r),
+            Err(e) => Err(Web3Error::JsonRPCError {
+                code: e.code,
+                message: e.message,
+                data: format!("{:?}", e.data),
+            }),
+        }
     }
 }
