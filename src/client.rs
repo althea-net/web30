@@ -378,7 +378,7 @@ impl Web3 {
             Err(e) => return Err(e),
         };
 
-        let payload = encode_call(sig, tokens);
+        let payload = encode_call(sig, tokens)?;
 
         let transaction = TransactionRequest {
             from: Some(own_address),
