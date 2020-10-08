@@ -467,10 +467,10 @@ impl Web3 {
                         else if let (Some(blocks_to_wait), Some(tx_block)) =
                             (blocks_to_wait.clone(), transaction.block_number.clone())
                         {
-                            let current_block = self.eth_get_latest_block().await?;
+                            let current_block = self.eth_block_number().await?;
                             // we check for underflow, which is possible on testnets
-                            if current_block.number > blocks_to_wait
-                                && current_block.number - blocks_to_wait >= tx_block
+                            if current_block > blocks_to_wait
+                                && current_block - blocks_to_wait >= tx_block
                             {
                                 return Ok(transaction);
                             }
