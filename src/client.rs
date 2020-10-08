@@ -12,7 +12,7 @@ use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
-use std::time::Duration;
+use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
 use tokio::time::delay_for;
 
@@ -335,8 +335,9 @@ impl Web3 {
             // So if yes you could set these values to none if making a parity request
             let gas_price: Uint256 = 1u8.into();
             // Geth represents gas as a u64 it will truncate leading zeros but not take
-            // a value larger than u64::MAX
-            let gas_limit = u64::MAX - 1;
+            // a value larger than u64::MAX, likewise the command will fail if we can't
+            // actually pay that fee. This operation maximizes the info we can get
+            let gas_limit = min((u64::MAX - 1).into(), our_balance.clone());
             self.eth_estimate_gas(TransactionRequest {
                 from: Some(own_address),
                 to: to_address,
@@ -390,19 +391,16 @@ impl Web3 {
         tokens: &[Token],
         own_address: Address,
     ) -> Result<Vec<u8>, Web3Error> {
-        let gas_price = match self.eth_gas_price().await {
-            Ok(val) => val,
-            Err(e) => return Err(e),
-        };
-
-        let nonce = match self.eth_get_transaction_count(own_address).await {
-            Ok(val) => val,
-            Err(e) => return Err(e),
-        };
+        let our_balance = self.eth_get_balance(own_address).await?;
+        let nonce = self.eth_get_transaction_count(own_address).await?;
 
         let payload = encode_call(sig, tokens)?;
 
-        let gas_limit = u64::MAX - 1;
+        let gas_price: Uint256 = 1u8.into();
+        // Geth represents gas as a u64 it will truncate leading zeros but not take
+        // a value larger than u64::MAX, likewise the command will fail if we can't
+        // actually pay that fee. This operation maximizes the info we can get
+        let gas_limit = min((u64::MAX - 1).into(), our_balance);
         let transaction = TransactionRequest {
             from: Some(own_address),
             to: contract_address,
