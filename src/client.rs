@@ -332,41 +332,21 @@ impl Web3 {
             // your balance Geth will once again fail. So Geth at this juncture won't
             // tell you what the transaction would cost, just that you can't afford it.
             //
-            // In order to fix this ridiculous problem we first try the parity flow, then
-            // fall back to a Geth flow on failure.
-            let res = self
-                .eth_estimate_gas(TransactionRequest {
-                    from: None,
-                    to: to_address,
-                    nonce: None,
-                    gas_price: None,
-                    gas: None,
-                    value: Some(value.clone().into()),
-                    data: Some(data.clone().into()),
-                })
-                .await;
-            if let Ok(val) = res {
-                val
-            } else {
-                // geth fallback flow, we specify a correct nonce, gas price
-                // and the largest gas amount we can afford given the price
-                // this should get us a correct gas amount back. This won't work
-                // if you have a zero balance. I believe that Geth actually just
-                // combines the actual transaction flow and the test transaction flow
-                // so essentially this has to be a fully valid transaction
-                let gas_price: Uint256 = 1u8.into();
-                let gas_limit = our_balance.clone() / gas_price.clone();
-                self.eth_estimate_gas(TransactionRequest {
-                    from: Some(own_address),
-                    to: to_address,
-                    nonce: Some(nonce.clone().into()),
-                    gas_price: Some(gas_price.into()),
-                    gas: Some(gas_limit.into()),
-                    value: Some(value.clone().into()),
-                    data: Some(data.clone().into()),
-                })
-                .await?
-            }
+            // So if yes you could set these values to none if making a parity request
+            let gas_price: Uint256 = 1u8.into();
+            // Geth represents gas as a u64 it will truncate leading zeros but not take
+            // a value larger than u64::MAX
+            let gas_limit = u64::MAX - 1;
+            self.eth_estimate_gas(TransactionRequest {
+                from: Some(own_address),
+                to: to_address,
+                nonce: Some(nonce.clone().into()),
+                gas_price: Some(gas_price.into()),
+                gas: Some(gas_limit.into()),
+                value: Some(value.clone().into()),
+                data: Some(data.clone().into()),
+            })
+            .await?
         };
 
         let network_id = if let Some(ni) = network_id {
@@ -422,11 +402,12 @@ impl Web3 {
 
         let payload = encode_call(sig, tokens)?;
 
+        let gas_limit = u64::MAX - 1;
         let transaction = TransactionRequest {
             from: Some(own_address),
             to: contract_address,
             nonce: Some(UnpaddedHex(nonce)),
-            gas: None,
+            gas: Some(gas_limit.into()),
             gas_price: Some(UnpaddedHex(gas_price)),
             value: Some(UnpaddedHex(0u64.into())),
             data: Some(Data(payload)),

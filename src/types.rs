@@ -202,6 +202,12 @@ impl From<Uint256> for UnpaddedHex {
     }
 }
 
+impl From<u64> for UnpaddedHex {
+    fn from(v: u64) -> Self {
+        UnpaddedHex(v.into())
+    }
+}
+
 /// Ethereum block
 #[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct Block {
