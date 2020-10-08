@@ -448,11 +448,11 @@ impl Web3 {
     /// warning, this function can and will wait forever if it has to
     pub async fn wait_for_transaction(
         &self,
-        tx_hash: [u8; 32],
+        tx_hash: Uint256,
     ) -> Result<TransactionResponse, Web3Error> {
         loop {
             delay_for(Duration::from_secs(1)).await;
-            match self.eth_get_transaction_by_hash(tx_hash.into()).await {
+            match self.eth_get_transaction_by_hash(tx_hash.clone()).await {
                 Ok(maybe_transaction) => {
                     if let Some(transaction) = maybe_transaction {
                         return Ok(transaction);
