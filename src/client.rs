@@ -12,8 +12,8 @@ use clarity::abi::{derive_signature, encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
-use std::sync::Arc;
 use std::time::Duration;
+use std::{sync::Arc, time::Instant};
 use tokio::time::delay_for;
 
 fn bytes_to_data(s: &[u8]) -> String {
@@ -444,21 +444,44 @@ impl Web3 {
         }
     }
 
-    /// Waits for a transaction with the given hash to show up on the chain
-    /// warning, this function can and will wait forever if it has to
+    /// Waits for a transaction with the given hash to be included in a block
+    /// it will wait for at most timeout time and optionally can wait for n
+    /// blocks to have passed
     pub async fn wait_for_transaction(
         &self,
         tx_hash: Uint256,
+        timeout: Duration,
+        blocks_to_wait: Option<Uint256>,
     ) -> Result<TransactionResponse, Web3Error> {
+        let start = Instant::now();
         loop {
             delay_for(Duration::from_secs(1)).await;
             match self.eth_get_transaction_by_hash(tx_hash.clone()).await {
                 Ok(maybe_transaction) => {
                     if let Some(transaction) = maybe_transaction {
-                        return Ok(transaction);
+                        // if no wait time is specified and the tx is in a block return right away
+                        if blocks_to_wait.clone().is_none() && transaction.block_number.is_some() {
+                            return Ok(transaction);
+                        }
+                        // One the tx is in a block we start waiting here
+                        else if let (Some(blocks_to_wait), Some(tx_block)) =
+                            (blocks_to_wait.clone(), transaction.block_number.clone())
+                        {
+                            let current_block = self.eth_get_latest_block().await?;
+                            // we check for underflow, which is possible on testnets
+                            if current_block.number > blocks_to_wait
+                                && current_block.number - blocks_to_wait >= tx_block
+                            {
+                                return Ok(transaction);
+                            }
+                        }
                     }
                 }
                 Err(e) => return Err(e),
+            }
+
+            if Instant::now() - start > timeout {
+                return Err(Web3Error::TransactionTimeout);
             }
         }
     }

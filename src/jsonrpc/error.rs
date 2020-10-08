@@ -19,6 +19,7 @@ pub enum Web3Error {
     EventNotFound(String),
     CouldNotRemoveFilter(String),
     ClarityError(ClarityError),
+    TransactionTimeout,
 }
 
 impl From<ParseIntError> for Web3Error {
@@ -41,6 +42,7 @@ impl Display for Web3Error {
             Web3Error::FailedToSend(val) => write!(f, "Web3 Failed to send {}", val),
             Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
             Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
+            Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
             Web3Error::CouldNotRemoveFilter(val) => {
                 write!(f, "Web3 Failed to remove filter from server {}", val)
             }
