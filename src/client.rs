@@ -304,6 +304,8 @@ impl Web3 {
             }
         }
 
+        let nonce = self.eth_get_transaction_count(own_address).await?;
+
         let mut gas_price = if let Some(gp) = gas_price {
             gp
         } else {
@@ -313,16 +315,58 @@ impl Web3 {
         let gas_limit = if let Some(gl) = gas_limit {
             gl
         } else {
-            self.eth_estimate_gas(TransactionRequest {
-                from: None,
-                to: to_address,
-                nonce: None,
-                gas_price: None,
-                gas: None,
-                value: Some(value.clone().into()),
-                data: Some(data.clone().into()),
-            })
-            .await?
+            // Geth and parity behave differently for the Estimate gas call
+            // Parity / OpenEthereum will allow you to specify no gas price
+            // and no gas amount the estimate gas call will then return the
+            // amount of gas the transaction would take. This is reasonable behavior
+            // from an endpoint that's supposed to let you estimate gas usage
+            //
+            // The gas price is of course irrelevant unless someone goes out of their
+            // way to design a contract that fails a low gas prices. Geth and Parity
+            // can't simulate an actual transaction market accurately.
+            //
+            // Geth on the other hand insists that you provide a gas price (any price)
+            // and a gas value. Otherwise it will not provide an estimate.
+            //
+            // If this value is too low Geth will fail, if this value is higher than
+            // your balance Geth will once again fail. So Geth at this juncture won't
+            // tell you what the transaction would cost, just that you can't afford it.
+            //
+            // In order to fix this ridiculous problem we first try the parity flow, then
+            // fall back to a Geth flow on failure.
+            let res = self
+                .eth_estimate_gas(TransactionRequest {
+                    from: None,
+                    to: to_address,
+                    nonce: None,
+                    gas_price: None,
+                    gas: None,
+                    value: Some(value.clone().into()),
+                    data: Some(data.clone().into()),
+                })
+                .await;
+            if let Ok(val) = res {
+                val
+            } else {
+                // geth fallback flow, we specify a correct nonce, gas price
+                // and the largest gas amount we can afford given the price
+                // this should get us a correct gas amount back. This won't work
+                // if you have a zero balance. I believe that Geth actually just
+                // combines the actual transaction flow and the test transaction flow
+                // so essentially this has to be a fully valid transaction
+                let gas_price: Uint256 = 1u8.into();
+                let gas_limit = our_balance.clone() / gas_price.clone();
+                self.eth_estimate_gas(TransactionRequest {
+                    from: Some(own_address),
+                    to: to_address,
+                    nonce: Some(nonce.clone().into()),
+                    gas_price: Some(gas_price.into()),
+                    gas: Some(gas_limit.into()),
+                    value: Some(value.clone().into()),
+                    data: Some(data.clone().into()),
+                })
+                .await?
+            }
         };
 
         let network_id = if let Some(ni) = network_id {
@@ -337,8 +381,6 @@ impl Web3 {
         if gas_price.clone() * gas_limit.clone() > our_balance {
             gas_price = our_balance / gas_limit.clone();
         }
-
-        let nonce = self.eth_get_transaction_count(own_address).await?;
 
         let transaction = Transaction {
             to: to_address,
