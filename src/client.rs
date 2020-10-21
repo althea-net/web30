@@ -8,19 +8,13 @@ use crate::jsonrpc::client::HTTPClient;
 use crate::jsonrpc::error::Web3Error;
 use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
 use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, UnpaddedHex, XdaiBlock};
-use clarity::abi::{derive_signature, encode_call, Token};
+use clarity::abi::{encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
 use tokio::time::sleep as delay_for;
-
-fn bytes_to_data(s: &[u8]) -> String {
-    let mut val = "0x".to_string();
-    val.push_str(&bytes_to_hex_str(&s));
-    val
-}
 
 /// An instance of Web3Client.
 #[derive(Clone)]
@@ -418,30 +412,6 @@ impl Web3 {
         Ok(bytes.0)
     }
 
-    /// Checks if an event has already happened.
-    pub async fn check_for_event(
-        &self,
-        contract_address: Address,
-        event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-    ) -> Result<Option<Log>, Web3Error> {
-        // Build a filter with specified topics
-        let mut new_filter = NewFilter::default();
-        new_filter.address = vec![contract_address];
-        new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-        ]);
-
-        match self.eth_get_logs(new_filter).await {
-            // Assuming the latest log is at the head of the vec
-            Ok(log) => Ok(log.first().cloned()),
-            Err(e) => Err(e),
-        }
-    }
-
     /// Waits for a transaction with the given hash to be included in a block
     /// it will wait for at most timeout time and optionally can wait for n
     /// blocks to have passed
@@ -481,91 +451,6 @@ impl Web3 {
             if Instant::now() - start > timeout {
                 return Err(Web3Error::TransactionTimeout);
             }
-        }
-    }
-
-    /// Same as wait_for_event, but doesn't use eth_newFilter
-    pub async fn wait_for_event_alt<F: Fn(Log) -> bool + 'static>(
-        &self,
-        contract_address: Address,
-        event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-        topic3: Option<Vec<[u8; 32]>>,
-        local_filter: F,
-    ) -> Result<Log, Web3Error> {
-        let new_filter = NewFilter {
-            address: vec![contract_address],
-            from_block: None,
-            to_block: None,
-            topics: Some(vec![
-                Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-                topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-                topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-                topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            ]),
-        };
-
-        delay_for(Duration::from_secs(10)).await;
-        let logs = match self.eth_get_logs(new_filter.clone()).await {
-            Ok(logs) => logs,
-            Err(e) => return Err(e),
-        };
-
-        for log in logs {
-            if local_filter(log.clone()) {
-                return Ok(log);
-            }
-        }
-        Err(Web3Error::EventNotFound(event.to_string()))
-    }
-
-    /// Sets up an event filter, waits for the event to happen, then removes the filter. Includes a
-    /// local filter. If a captured event does not pass this filter, it is ignored.
-    pub async fn wait_for_event<F: Fn(Log) -> bool + 'static>(
-        &self,
-        contract_address: Address,
-        event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-        topic3: Option<Vec<[u8; 32]>>,
-        local_filter: F,
-    ) -> Result<Log, Web3Error> {
-        let mut new_filter = NewFilter::default();
-        new_filter.address = vec![contract_address];
-        new_filter.from_block = None;
-        new_filter.to_block = None;
-        new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-        ]);
-
-        let filter_id = match self.eth_new_filter(new_filter).await {
-            Ok(f) => f,
-            Err(e) => return Err(e),
-        };
-
-        delay_for(Duration::from_secs(10)).await;
-        let logs = match self.eth_get_filter_changes(filter_id.clone()).await {
-            Ok(changes) => changes,
-            Err(e) => return Err(e),
-        };
-        let mut found_log = None;
-        for log in logs {
-            if local_filter(log.clone()) {
-                found_log = Some(log);
-            }
-        }
-
-        if let Err(e) = self.eth_uninstall_filter(filter_id).await {
-            return Err(Web3Error::CouldNotRemoveFilter(format!("{}", e)));
-        }
-
-        match found_log {
-            Some(log) => Ok(log),
-            None => Err(Web3Error::EventNotFound(event.to_string())),
         }
     }
 }
