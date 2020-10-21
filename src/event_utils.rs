@@ -136,12 +136,12 @@ impl Web3 {
     ) -> Result<Vec<Log>, Web3Error> {
         // Build a filter with specified topics
         let mut new_filter = NewFilter::default();
-        new_filter.from_block = Some(start_block.to_string());
+        new_filter.from_block = Some(format!("{:#x}", start_block));
         if let Some(end_block) = end_block {
-            new_filter.to_block = Some(end_block.to_string());
+            new_filter.to_block = Some(format!("{:#x}", end_block));
         } else {
             let latest_block = self.eth_block_number().await?;
-            new_filter.to_block = Some(latest_block.to_string());
+            new_filter.to_block = Some(format!("{:#x}", latest_block));
         }
 
         new_filter.address = vec![contract_address];
