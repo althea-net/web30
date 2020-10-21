@@ -1,0 +1,182 @@
+//! This module contains utility functions for interacting with ERC20 tokens and contracts
+use crate::jsonrpc::error::Web3Error;
+use crate::{client::Web3, types::SendTxOption};
+use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
+use clarity::{Address, Uint256};
+use num::Bounded;
+use std::time::Duration;
+use tokio::time::timeout as future_timeout;
+
+pub static ERC20_GAS_LIMIT: u128 = 40_000;
+
+impl Web3 {
+    /// Checks if any given contract is approved to spend money from any given erc20 contract
+    /// using any given address. What exactly this does can be hard to grok, essentially when
+    /// you want contract A to be able to spend your erc20 contract funds you need to call 'approve'
+    /// on the ERC20 contract with your own address and A's address so that in the future when you call
+    /// contract A it can manipulate your ERC20 balances. This function checks if that has already been done.
+    pub async fn check_erc20_approved(
+        &self,
+        erc20: Address,
+        own_address: Address,
+        target_contract: Address,
+    ) -> Result<bool, Web3Error> {
+        let allowance = self
+            .contract_call(
+                erc20,
+                "allowance(address,address)",
+                &[own_address.into(), target_contract.into()],
+                own_address,
+            )
+            .await?;
+
+        let allowance = Uint256::from_bytes_be(match allowance.get(0..32) {
+            Some(val) => val,
+            None => {
+                return Err(Web3Error::ContractCallError(
+                    "erc20 allowance(address, address) failed".to_string(),
+                ))
+            }
+        });
+
+        // Check if the allowance remaining is greater than half of a Uint256- it's as good
+        // a test as any.
+        Ok(allowance > (Uint256::max_value() / 2u32.into()))
+    }
+
+    /// Approves a given contract to spend erc20 funds from the given address from the erc20 contract provided.
+    /// What exactly this does can be hard to grok, essentially when you want contract A to be able to spend
+    /// your erc20 contract funds you need to call 'approve' on the ERC20 contract with your own address and A's
+    /// address so that in the future when you call contract A it can manipulate your ERC20 balances.
+    /// This function performs that action and waits for it to complete for up to Timeout duration
+    /// `options` takes a vector of `SendTxOption` for configuration
+    /// unlike the lower level eth_send_transaction() this call builds
+    /// the transaction abstracting away details like chain id, gas,
+    /// and network id.
+    pub async fn approve_uniswap_dai_transfers(
+        &self,
+        erc20: Address,
+        eth_private_key: EthPrivateKey,
+        target_contract: Address,
+        timeout: Option<Duration>,
+        options: Vec<SendTxOption>,
+    ) -> Result<Uint256, Web3Error> {
+        let own_address = eth_private_key.to_public_key()?;
+        let payload = encode_call(
+            "approve(address,uint256)",
+            &[target_contract.into(), Uint256::max_value().into()],
+        )?;
+
+        let txid = self
+            .send_transaction(
+                erc20,
+                payload,
+                0u32.into(),
+                own_address,
+                eth_private_key,
+                options,
+            )
+            .await?;
+
+        // wait for transaction to enter the chain if the user has requested it
+        if let Some(timeout) = timeout {
+            let _res = future_timeout(
+                timeout,
+                self.wait_for_event_alt(
+                    erc20,
+                    "Approval(address,address,uint256)",
+                    Some(vec![own_address.into()]),
+                    Some(vec![target_contract.into()]),
+                    None,
+                    |_| true,
+                ),
+            )
+            .await??;
+        }
+
+        Ok(txid)
+    }
+
+    /// Send an erc20 token to the target address, optionally wait until it enters the blockchain
+    /// `options` takes a vector of `SendTxOption` for configuration
+    /// unlike the lower level eth_send_transaction() this call builds
+    /// the transaction abstracting away details like chain id, gas,
+    /// and network id.
+    /// WARNING: you must specify networkID in situations where a single
+    /// node is operating no more than one chain. Otherwise it is possible
+    /// for the full node to trick the client into signing transactions
+    /// on unintended chains potentially to their benefit
+    pub async fn erc20_send(
+        &self,
+        amount: Uint256,
+        recipient: Address,
+        erc20: Address,
+        sender_private_key: EthPrivateKey,
+        wait_timeout: Option<Duration>,
+        options: Vec<SendTxOption>,
+    ) -> Result<Uint256, Web3Error> {
+        let sender_address = sender_private_key.to_public_key()?;
+
+        // if the user sets a gas limit we should honor it, if they don't we
+        // should add the default
+        let mut has_gas_limit = false;
+        let mut options = options;
+        for option in options.iter() {
+            if let SendTxOption::GasLimit(_) = option {
+                has_gas_limit = true;
+                break;
+            }
+        }
+        if !has_gas_limit {
+            options.push(SendTxOption::GasLimit(ERC20_GAS_LIMIT.into()));
+        }
+
+        let tx_hash = self
+            .send_transaction(
+                erc20,
+                encode_call(
+                    "transfer(address,uint256)",
+                    &[recipient.into(), amount.clone().into()],
+                )?,
+                0u32.into(),
+                sender_address,
+                sender_private_key,
+                options,
+            )
+            .await?;
+
+        if let Some(timeout) = wait_timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(tx_hash.clone(), timeout, None),
+            )
+            .await??;
+        }
+
+        Ok(tx_hash)
+    }
+
+    pub async fn get_erc20_balance(
+        &self,
+        erc20: Address,
+        target_address: Address,
+    ) -> Result<Uint256, Web3Error> {
+        let balance = self
+            .contract_call(
+                erc20,
+                "balanceOf(address)",
+                &[target_address.into()],
+                target_address,
+            )
+            .await?;
+
+        Ok(Uint256::from_bytes_be(match balance.get(0..32) {
+            Some(val) => val,
+            None => {
+                return Err(Web3Error::ContractCallError(
+                    "Bad response from ERC20 balance".to_string(),
+                ))
+            }
+        }))
+    }
+}

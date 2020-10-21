@@ -17,5 +17,6 @@ extern crate log;
 extern crate assert_json_diff;
 
 pub mod client;
+mod erc20_utils;
 pub mod jsonrpc;
 pub mod types;

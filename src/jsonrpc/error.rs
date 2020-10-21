@@ -5,6 +5,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::num::ParseIntError;
+use tokio::time::error::Elapsed;
 
 #[derive(Debug)]
 pub enum Web3Error {
@@ -19,6 +20,7 @@ pub enum Web3Error {
     EventNotFound(String),
     CouldNotRemoveFilter(String),
     ClarityError(ClarityError),
+    ContractCallError(String),
     TransactionTimeout,
 }
 
@@ -34,6 +36,12 @@ impl From<ClarityError> for Web3Error {
     }
 }
 
+impl From<Elapsed> for Web3Error {
+    fn from(_error: Elapsed) -> Self {
+        Web3Error::TransactionTimeout
+    }
+}
+
 impl Display for Web3Error {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
@@ -43,6 +51,9 @@ impl Display for Web3Error {
             Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
             Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
             Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
+            Web3Error::ContractCallError(val) => {
+                write!(f, "Error performing Ethereum contract call {}", val)
+            }
             Web3Error::CouldNotRemoveFilter(val) => {
                 write!(f, "Web3 Failed to remove filter from server {}", val)
             }

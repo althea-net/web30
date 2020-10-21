@@ -14,9 +14,10 @@ clarity = "0.3"
 num256 = "0.3"
 futures = "0.3"
 actix-web = {version = "3",  default-features = false, features=["openssl", "compress"]}
-tokio = {version = "0.2", features=["macros"]}
+tokio = {version = "0.3", features=["macros", "time"]}
 actix = "0.10"
 log = "0.4"
+num = "0.3"
 
 [dev-dependencies]
 assert-json-diff = "1"

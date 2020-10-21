@@ -14,7 +14,7 @@ use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
-use tokio::time::delay_for;
+use tokio::time::sleep as delay_for;
 
 fn bytes_to_data(s: &[u8]) -> String {
     let mut val = "0x".to_string();
