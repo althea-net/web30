@@ -1,6 +1,6 @@
 [package]
 name = "web30"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick"]
 description = "Async endian safe web3 library"
 license = "Apache-2.0"
@@ -14,7 +14,7 @@ clarity = "0.3"
 num256 = "0.3"
 futures = "0.3"
 actix-web = {version = "3",  default-features = false, features=["openssl", "compress"]}
-tokio = {version = "0.3", features=["macros", "time"]}
+tokio = {version = "0.2", features=["macros", "time"]}
 actix = "0.10"
 log = "0.4"
 num = "0.3"

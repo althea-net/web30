@@ -4,7 +4,7 @@ use crate::{jsonrpc::error::Web3Error, types::Log};
 use clarity::{abi::derive_signature, utils::bytes_to_hex_str};
 use clarity::{Address, Uint256};
 use std::time::Duration;
-use tokio::time::sleep as delay_for;
+use tokio::time::delay_for;
 
 fn bytes_to_data(s: &[u8]) -> String {
     let mut val = "0x".to_string();

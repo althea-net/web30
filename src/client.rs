@@ -14,7 +14,7 @@ use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
-use tokio::time::sleep as delay_for;
+use tokio::time::delay_for;
 
 /// An instance of Web3Client.
 #[derive(Clone)]

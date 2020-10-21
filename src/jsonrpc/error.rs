@@ -5,7 +5,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::num::ParseIntError;
-use tokio::time::error::Elapsed;
+use tokio::time::Elapsed;
 
 #[derive(Debug)]
 pub enum Web3Error {
