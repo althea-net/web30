@@ -372,6 +372,7 @@ pub struct ConciseXdaiBlock {
 }
 
 /// Used to configure send_transaction
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SendTxOption {
     GasPrice(Uint256),
     GasPriceMultiplier(Uint256),
