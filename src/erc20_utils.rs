@@ -53,7 +53,7 @@ impl Web3 {
     /// unlike the lower level eth_send_transaction() this call builds
     /// the transaction abstracting away details like chain id, gas,
     /// and network id.
-    pub async fn approve_uniswap_dai_transfers(
+    pub async fn approve_erc20_transfers(
         &self,
         erc20: Address,
         eth_private_key: EthPrivateKey,
