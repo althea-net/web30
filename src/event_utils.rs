@@ -3,7 +3,7 @@ use crate::{client::Web3, types::NewFilter};
 use crate::{jsonrpc::error::Web3Error, types::Log};
 use clarity::{abi::derive_signature, utils::bytes_to_hex_str};
 use clarity::{Address, Uint256};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::time::delay_for;
 
 fn bytes_to_data(s: &[u8]) -> String {
@@ -13,29 +13,37 @@ fn bytes_to_data(s: &[u8]) -> String {
 }
 
 impl Web3 {
-    /// Same as wait_for_event, but doesn't use eth_newFilter
+    /// Waits for a single event but instead of creating a filter and checking
+    /// for changes this function waits for the provided wait time before
+    /// checking if the event has occurred. This function will wait for at
+    // least 'wait_time' before progressing, regardless of the outcome.
     pub async fn wait_for_event_alt<F: Fn(Log) -> bool + 'static>(
         &self,
-        contract_address: Address,
+        wait_time: Duration,
+        contract_address: Vec<Address>,
         event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-        topic3: Option<Vec<[u8; 32]>>,
+        topics: Vec<Vec<[u8; 32]>>,
         local_filter: F,
     ) -> Result<Log, Web3Error> {
+        let sig = derive_signature(event)?;
+        let mut final_topics = Vec::new();
+        final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
+        for topic in topics {
+            let mut parts = Vec::new();
+            for item in topic {
+                parts.push(Some(bytes_to_data(&item)))
+            }
+            final_topics.push(Some(parts));
+        }
+
         let new_filter = NewFilter {
-            address: vec![contract_address],
+            address: contract_address,
             from_block: None,
             to_block: None,
-            topics: Some(vec![
-                Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-                topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-                topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-                topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            ]),
+            topics: Some(final_topics),
         };
 
-        delay_for(Duration::from_secs(10)).await;
+        delay_for(wait_time).await;
         let logs = match self.eth_get_logs(new_filter.clone()).await {
             Ok(logs) => logs,
             Err(e) => return Err(e),
@@ -49,42 +57,54 @@ impl Web3 {
         Err(Web3Error::EventNotFound(event.to_string()))
     }
 
-    /// Sets up an event filter, waits for the event to happen, then removes the filter. Includes a
-    /// local filter. If a captured event does not pass this filter, it is ignored.
+    /// Sets up an event filter, waits for a single event to happen, then removes the filter. Includes a
+    /// local filter. If a captured event does not pass this filter, it is ignored. This differs from
+    /// wait_for_event_alt in that it will check for filter changes every second and potentially exit
+    /// earlier than the wait_for time provided by the user.
     pub async fn wait_for_event<F: Fn(Log) -> bool + 'static>(
         &self,
-        contract_address: Address,
+        wait_for: Duration,
+        contract_address: Vec<Address>,
         event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-        topic3: Option<Vec<[u8; 32]>>,
+        topics: Vec<Vec<[u8; 32]>>,
         local_filter: F,
     ) -> Result<Log, Web3Error> {
-        let mut new_filter = NewFilter::default();
-        new_filter.address = vec![contract_address];
-        new_filter.from_block = None;
-        new_filter.to_block = None;
-        new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-        ]);
+        let sig = derive_signature(event)?;
+        let mut final_topics = Vec::new();
+        final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
+        for topic in topics {
+            let mut parts = Vec::new();
+            for item in topic {
+                parts.push(Some(bytes_to_data(&item)))
+            }
+            final_topics.push(Some(parts));
+        }
+
+        let new_filter = NewFilter {
+            address: contract_address,
+            from_block: None,
+            to_block: None,
+            topics: Some(final_topics),
+        };
 
         let filter_id = match self.eth_new_filter(new_filter).await {
             Ok(f) => f,
             Err(e) => return Err(e),
         };
 
-        delay_for(Duration::from_secs(10)).await;
-        let logs = match self.eth_get_filter_changes(filter_id.clone()).await {
-            Ok(changes) => changes,
-            Err(e) => return Err(e),
-        };
+        let start = Instant::now();
         let mut found_log = None;
-        for log in logs {
-            if local_filter(log.clone()) {
-                found_log = Some(log);
+        while Instant::now() - start < wait_for {
+            delay_for(Duration::from_secs(10)).await;
+            let logs = match self.eth_get_filter_changes(filter_id.clone()).await {
+                Ok(changes) => changes,
+                Err(e) => return Err(e),
+            };
+            for log in logs {
+                if local_filter(log.clone()) {
+                    found_log = Some(log);
+                    break;
+                }
             }
         }
 
@@ -98,58 +118,43 @@ impl Web3 {
         }
     }
 
-    /// Checks if a singular event has already happened. If multiple events match
-    /// the description only the first match is provided.
-    pub async fn check_for_event(
-        &self,
-        contract_address: Address,
-        event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
-    ) -> Result<Option<Log>, Web3Error> {
-        // Build a filter with specified topics
-        let mut new_filter = NewFilter::default();
-        new_filter.address = vec![contract_address];
-        new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-        ]);
-
-        match self.eth_get_logs(new_filter).await {
-            // Assuming the latest log is at the head of the vec
-            Ok(log) => Ok(log.first().cloned()),
-            Err(e) => Err(e),
-        }
-    }
-
     /// Checks for multiple events over a block range. If no ending block is provided
-    /// the latest will be used.
+    /// the latest will be used. This function will not wait for events to occur
     pub async fn check_for_events(
         &self,
         start_block: Uint256,
         end_block: Option<Uint256>,
-        contract_address: Address,
+        contract_address: Vec<Address>,
         event: &str,
-        topic1: Option<Vec<[u8; 32]>>,
-        topic2: Option<Vec<[u8; 32]>>,
+        topics: Vec<Vec<[u8; 32]>>,
     ) -> Result<Vec<Log>, Web3Error> {
         // Build a filter with specified topics
-        let mut new_filter = NewFilter::default();
-        new_filter.from_block = Some(format!("{:#x}", start_block));
+        let from_block = Some(format!("{:#x}", start_block));
+        let to_block;
         if let Some(end_block) = end_block {
-            new_filter.to_block = Some(format!("{:#x}", end_block));
+            to_block = Some(format!("{:#x}", end_block));
         } else {
             let latest_block = self.eth_block_number().await?;
-            new_filter.to_block = Some(format!("{:#x}", latest_block));
+            to_block = Some(format!("{:#x}", latest_block));
         }
 
-        new_filter.address = vec![contract_address];
-        new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
-            topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-            topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
-        ]);
+        let sig = derive_signature(event)?;
+        let mut final_topics = Vec::new();
+        final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
+        for topic in topics {
+            let mut parts = Vec::new();
+            for item in topic {
+                parts.push(Some(bytes_to_data(&item)))
+            }
+            final_topics.push(Some(parts));
+        }
+
+        let new_filter = NewFilter {
+            address: contract_address,
+            from_block,
+            to_block,
+            topics: Some(final_topics),
+        };
 
         Ok(self.eth_get_logs(new_filter).await?)
     }

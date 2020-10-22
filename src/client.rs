@@ -31,6 +31,10 @@ impl Web3 {
         }
     }
 
+    pub fn get_timeout(&self) -> Duration {
+        self.timeout
+    }
+
     pub async fn eth_accounts(&self) -> Result<Vec<Address>, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_accounts", Vec::<String>::new(), self.timeout, None)

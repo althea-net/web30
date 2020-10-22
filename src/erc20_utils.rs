@@ -80,18 +80,14 @@ impl Web3 {
 
         // wait for transaction to enter the chain if the user has requested it
         if let Some(timeout) = timeout {
-            let _res = future_timeout(
+            self.wait_for_event_alt(
                 timeout,
-                self.wait_for_event_alt(
-                    erc20,
-                    "Approval(address,address,uint256)",
-                    Some(vec![own_address.into()]),
-                    Some(vec![target_contract.into()]),
-                    None,
-                    |_| true,
-                ),
+                vec![erc20],
+                "Approval(address,address,uint256)",
+                vec![vec![own_address.into()], vec![target_contract.into()]],
+                |_| true,
             )
-            .await??;
+            .await?;
         }
 
         Ok(txid)
