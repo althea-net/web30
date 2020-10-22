@@ -95,7 +95,7 @@ impl Web3 {
         let start = Instant::now();
         let mut found_log = None;
         while Instant::now() - start < wait_for {
-            delay_for(Duration::from_secs(10)).await;
+            delay_for(Duration::from_secs(1)).await;
             let logs = match self.eth_get_filter_changes(filter_id.clone()).await {
                 Ok(changes) => changes,
                 Err(e) => return Err(e),
