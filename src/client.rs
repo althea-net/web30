@@ -58,7 +58,7 @@ impl Web3 {
                 "eth_getFilterChanges",
                 vec![format!("{:#x}", filter_id.clone())],
                 self.timeout,
-                None,
+                Some(5_000_000),
             )
             .await
     }
@@ -75,7 +75,12 @@ impl Web3 {
 
     pub async fn eth_get_logs(&self, new_filter: NewFilter) -> Result<Vec<Log>, Web3Error> {
         self.jsonrpc_client
-            .request_method("eth_getLogs", vec![new_filter], self.timeout, None)
+            .request_method(
+                "eth_getLogs",
+                vec![new_filter],
+                self.timeout,
+                Some(5_000_000),
+            )
             .await
     }
 
