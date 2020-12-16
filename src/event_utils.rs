@@ -118,14 +118,48 @@ impl Web3 {
         }
     }
 
-    /// Checks for multiple events over a block range. If no ending block is provided
-    /// the latest will be used. This function will not wait for events to occur
+    /// Checks for multiple events as defined by their signature strings over a block range. If no ending block is provided
+    /// the latest will be used. This function will not wait for events to occur.
     pub async fn check_for_events(
         &self,
         start_block: Uint256,
         end_block: Option<Uint256>,
         contract_address: Vec<Address>,
-        event: &str,
+        events: Vec<&str>,
+    ) -> Result<Vec<Log>, Web3Error> {
+        // Build a filter with specified topics
+        let from_block = Some(format!("{:#x}", start_block));
+        let to_block;
+        if let Some(end_block) = end_block {
+            to_block = Some(format!("{:#x}", end_block));
+        } else {
+            let latest_block = self.eth_block_number().await?;
+            to_block = Some(format!("{:#x}", latest_block));
+        }
+
+        let mut final_topics = Vec::new();
+        for event in events {
+            let sig = derive_signature(event)?;
+            final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
+        }
+
+        let new_filter = NewFilter {
+            address: contract_address,
+            from_block,
+            to_block,
+            topics: Some(final_topics),
+        };
+
+        Ok(self.eth_get_logs(new_filter).await?)
+    }
+
+    /// Checks for multiple events as defined by arbitrary user input over a block range. If no ending block is provided
+    /// the latest will be used. This function will not wait for events to occur
+    pub async fn check_for_arbitrary_events(
+        &self,
+        start_block: Uint256,
+        end_block: Option<Uint256>,
+        contract_address: Vec<Address>,
         topics: Vec<Vec<[u8; 32]>>,
     ) -> Result<Vec<Log>, Web3Error> {
         // Build a filter with specified topics
@@ -138,9 +172,7 @@ impl Web3 {
             to_block = Some(format!("{:#x}", latest_block));
         }
 
-        let sig = derive_signature(event)?;
         let mut final_topics = Vec::new();
-        final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
         for topic in topics {
             let mut parts = Vec::new();
             for item in topic {
