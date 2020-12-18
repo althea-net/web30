@@ -19,6 +19,7 @@ use tokio::time::delay_for;
 /// An instance of Web3Client.
 #[derive(Clone)]
 pub struct Web3 {
+    url: String,
     jsonrpc_client: Arc<Box<HTTPClient>>,
     timeout: Duration,
 }
@@ -28,11 +29,15 @@ impl Web3 {
         Self {
             jsonrpc_client: Arc::new(Box::new(HTTPClient::new(url))),
             timeout,
+            url: url.to_string(),
         }
     }
 
     pub fn get_timeout(&self) -> Duration {
         self.timeout
+    }
+    pub fn get_url(&self) -> String {
+        self.url.clone()
     }
 
     pub async fn eth_accounts(&self) -> Result<Vec<Address>, Web3Error> {
