@@ -302,6 +302,7 @@ impl Web3 {
         let mut gas_limit = None;
         let mut network_id = None;
         let our_balance = self.eth_get_balance(own_address).await?;
+        let mut nonce = self.eth_get_transaction_count(own_address).await?;
 
         for option in options {
             match option {
@@ -309,10 +310,9 @@ impl Web3 {
                 SendTxOption::GasPriceMultiplier(gpm) => gas_price_multiplier = gpm,
                 SendTxOption::GasLimit(gl) => gas_limit = Some(gl),
                 SendTxOption::NetworkId(ni) => network_id = Some(ni),
+                SendTxOption::Nonce(n) => nonce = n,
             }
         }
-
-        let nonce = self.eth_get_transaction_count(own_address).await?;
 
         let mut gas_price = if let Some(gp) = gas_price {
             gp

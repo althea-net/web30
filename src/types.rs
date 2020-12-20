@@ -378,6 +378,7 @@ pub enum SendTxOption {
     GasPriceMultiplier(Uint256),
     GasLimit(Uint256),
     NetworkId(u64),
+    Nonce(Uint256),
 }
 
 fn parse_possibly_empty_hex_val<'de, D>(deserializer: D) -> Result<Uint256, D::Error>
