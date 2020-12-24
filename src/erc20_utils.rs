@@ -7,7 +7,7 @@ use num::Bounded;
 use std::time::Duration;
 use tokio::time::timeout as future_timeout;
 
-pub static ERC20_GAS_LIMIT: u128 = 40_000;
+pub static ERC20_GAS_LIMIT: u128 = 100_000;
 
 impl Web3 {
     /// Checks if any given contract is approved to spend money from any given erc20 contract
