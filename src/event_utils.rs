@@ -6,6 +6,23 @@ use clarity::{Address, Uint256};
 use std::time::{Duration, Instant};
 use tokio::time::delay_for;
 
+/// takes an address and spits out an event, There's some argument to
+/// not use [u8; 32] for event definitions because of how much trouble
+/// this is but mostly you watch for addresses, Uint256 values and byte arrays
+/// the last is best represented by this and the first is easily provided by this
+/// function. Uint256 has a get_bytes function but you do need to check the length
+pub fn address_to_event(address: Address) -> [u8; 32] {
+    // addresses are 20 bytes and must be placed into the top bytes of the
+    // 32 byte uint256
+    let mut topic: [u8; 32] = [0; 32];
+    let mut address_bytes = address.as_bytes().to_vec();
+    for _ in 0..12 {
+        address_bytes.insert(0, 0);
+    }
+    topic.copy_from_slice(&address_bytes);
+    topic
+}
+
 fn bytes_to_data(s: &[u8]) -> String {
     let mut val = "0x".to_string();
     val.push_str(&bytes_to_hex_str(&s));

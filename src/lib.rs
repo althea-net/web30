@@ -21,3 +21,5 @@ mod erc20_utils;
 mod event_utils;
 pub mod jsonrpc;
 pub mod types;
+
+pub use event_utils::address_to_event;
