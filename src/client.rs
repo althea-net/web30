@@ -59,7 +59,7 @@ impl Web3 {
     ) -> Box<dyn Future<Item = Vec<Log>, Error = Error>> {
         self.jsonrpc_client.request_method(
             "eth_getFilterChanges",
-            vec![format!("{:#x}", filter_id.clone())],
+            vec![format!("{:#x}", filter_id)],
             self.timeout,
         )
     }
@@ -69,7 +69,7 @@ impl Web3 {
     ) -> Box<dyn Future<Item = bool, Error = Error>> {
         self.jsonrpc_client.request_method(
             "eth_uninstallFilter",
-            vec![format!("{:#x}", filter_id.clone())],
+            vec![format!("{:#x}", filter_id)],
             self.timeout,
         )
     }
@@ -278,7 +278,7 @@ impl Web3 {
             .eth_gas_price()
             .join(salf.eth_get_transaction_count(own_address));
 
-        let payload = encode_call(sig, tokens);
+        let payload = encode_call(sig, tokens).unwrap();
 
         Box::new(
             props
@@ -296,7 +296,7 @@ impl Web3 {
                     salf.eth_call(transaction)
                 })
                 .and_then(|bytes| {
-                    let bytes = bytes.clone();
+                    let bytes = bytes;
                     Ok(bytes.0)
                 }),
         )
@@ -316,7 +316,7 @@ impl Web3 {
         let mut new_filter = NewFilter::default();
         new_filter.address = vec![contract_address];
         new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
+            Some(vec![Some(bytes_to_data(&derive_signature(event).unwrap()))]),
             topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
             topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
         ]);
@@ -361,7 +361,7 @@ impl Web3 {
             from_block: None,
             to_block: None,
             topics: Some(vec![
-                Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
+                Some(vec![Some(bytes_to_data(&derive_signature(event).unwrap()))]),
                 topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
                 topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
                 topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
@@ -372,7 +372,7 @@ impl Web3 {
             Interval::new(Duration::from_secs(10))
                 .from_err()
                 .and_then({
-                    let salf = salf.clone();
+                    let salf = salf;
                     move |_| salf.eth_get_logs(new_filter.clone())
                 })
                 .filter_map(move |logs: Vec<Log>| {
@@ -408,7 +408,7 @@ impl Web3 {
         new_filter.from_block = None;
         new_filter.to_block = None;
         new_filter.topics = Some(vec![
-            Some(vec![Some(bytes_to_data(&derive_signature(event)))]),
+            Some(vec![Some(bytes_to_data(&derive_signature(event).unwrap()))]),
             topic1.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
             topic2.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
             topic3.map(|v| v.into_iter().map(|val| Some(bytes_to_data(&val))).collect()),
