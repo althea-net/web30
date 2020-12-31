@@ -47,10 +47,7 @@ impl HTTPClient {
         // the payload size limit for this request, almost everything
         // will set this to None, and get the default 64k, but some requests
         // need bigger buffers (like full block requests)
-        let limit = match request_size_limit {
-            Some(val) => val,
-            None => 65536,
-        };
+        let limit = request_size_limit.unwrap_or(65536);
         let payload = Request::new(self.next_id(), method, params);
         let res = self
             .client
