@@ -296,7 +296,8 @@ pub struct XdaiBlock {
 /// block with more concise tx hashes instead of full transactions
 #[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
 pub struct ConciseBlock {
-    pub author: Address,
+    // geth does not include the author in it's RPC response.
+    pub author: Option<Address>,
     pub difficulty: Uint256,
     #[serde(
         rename = "extraData",
@@ -319,8 +320,9 @@ pub struct ConciseBlock {
     pub parent_hash: Uint256,
     #[serde(rename = "receiptsRoot")]
     pub receipts_root: Uint256,
+    // Geth also does not include this field.
     #[serde(rename = "sealFields")]
-    pub seal_fields: Vec<Uint256>,
+    pub seal_fields: Option<Vec<Uint256>>,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
     pub size: Uint256,
@@ -538,6 +540,19 @@ mod tests {
             .expect("Failed to read test files!");
 
         let _decoded: Block = serde_json::from_str(&file).unwrap();
+    }
+
+    #[test]
+    fn decode_concise_block() {
+        let file = read_to_string("test_files/concise_parity_eth_block.json")
+            .expect("Failed to read test files!");
+
+        let _decoded: ConciseBlock = serde_json::from_str(&file).unwrap();
+
+        let file = read_to_string("test_files/concise_geth_eth_block.json")
+            .expect("Failed to read test files!");
+
+        let _decoded: ConciseBlock = serde_json::from_str(&file).unwrap();
     }
 
     #[test]
