@@ -511,12 +511,13 @@ fn test_transaction_count_response() {
 
 #[test]
 fn test_block_response() {
+    env_logger::init();
     use actix::Arbiter;
     use actix::System;
     System::run(|| {
-        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+        let web3 = Web3::new("https://eth.altheamesh.com", Duration::from_secs(5));
         Arbiter::spawn(async move {
-            let val = web3.eth_get_latest_block().await;
+            let val = web3.eth_get_latest_block_full().await;
             let val = val.expect("Actix failure");
             assert!(val.number > 10u32.into());
             System::current().stop();

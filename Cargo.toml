@@ -1,6 +1,6 @@
 [package]
 name = "web30"
-version = "0.10.2"
+version = "0.10.3"
 authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick"]
 description = "Async endian safe web3 library"
 license = "Apache-2.0"
@@ -21,4 +21,5 @@ num = "0.3"
 
 [dev-dependencies]
 assert-json-diff = "1"
+env_logger = "0.8"
 
