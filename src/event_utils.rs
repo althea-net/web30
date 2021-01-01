@@ -1,7 +1,10 @@
 //! This module contains functions for managing Ethereum events
 use crate::{client::Web3, types::NewFilter};
 use crate::{jsonrpc::error::Web3Error, types::Log};
-use clarity::{abi::derive_signature, utils::bytes_to_hex_str};
+use clarity::{
+    abi::{derive_signature, SerializedToken, Token},
+    utils::bytes_to_hex_str,
+};
 use clarity::{Address, Uint256};
 use std::time::{Duration, Instant};
 use tokio::time::delay_for;
@@ -12,15 +15,11 @@ use tokio::time::delay_for;
 /// the last is best represented by this and the first is easily provided by this
 /// function. Uint256 has a get_bytes function but you do need to check the length
 pub fn address_to_event(address: Address) -> [u8; 32] {
-    // addresses are 20 bytes and must be placed into the top bytes of the
-    // 32 byte uint256
-    let mut topic: [u8; 32] = [0; 32];
-    let mut address_bytes = address.as_bytes().to_vec();
-    for _ in 0..12 {
-        address_bytes.insert(0, 0);
+    let token = Token::Address(address);
+    match token.serialize() {
+        SerializedToken::Dynamic(_) => panic!("Addresses are not dynamic!"),
+        SerializedToken::Static(v) => v,
     }
-    topic.copy_from_slice(&address_bytes);
-    topic
 }
 
 fn bytes_to_data(s: &[u8]) -> String {
