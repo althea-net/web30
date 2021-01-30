@@ -20,6 +20,6 @@ log = "0.4"
 num = "0.3"
 
 [dev-dependencies]
-assert-json-diff = "1"
+assert-json-diff = "2"
 env_logger = "0.8"
 
