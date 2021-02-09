@@ -5,7 +5,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::num::ParseIntError;
-use tokio::time::Elapsed;
+use tokio::time::error::Elapsed;
+use tokio::time::Timeout;
 
 #[derive(Debug)]
 pub enum Web3Error {
@@ -33,6 +34,12 @@ impl From<ParseIntError> for Web3Error {
 impl From<ClarityError> for Web3Error {
     fn from(error: ClarityError) -> Self {
         Web3Error::ClarityError(error)
+    }
+}
+
+impl<T> From<Timeout<T>> for Web3Error {
+    fn from(_error: Timeout<T>) -> Self {
+        Web3Error::TransactionTimeout
     }
 }
 

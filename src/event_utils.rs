@@ -7,7 +7,7 @@ use clarity::{
 };
 use clarity::{Address, Uint256};
 use std::time::{Duration, Instant};
-use tokio::time::delay_for;
+use tokio::time::sleep as delay_for;
 
 /// takes an address and spits out an event, There's some argument to
 /// not use [u8; 32] for event definitions because of how much trouble

@@ -14,7 +14,7 @@ use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
-use tokio::time::delay_for;
+use tokio::time::sleep as delay_for;
 
 /// An instance of Web3Client.
 #[derive(Clone)]
@@ -476,7 +476,7 @@ fn test_complex_response() {
     use actix::System;
     System::run(|| {
         let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-        let txid1 = "0x8b9ef028f99016cd3cb8d4168df7491a0bf44f08b678d37f63ab61e782c500ab"
+        let txid1 = "0x558d5673227de984095ee8f35fbbfb1ab830c918ccea0b1f3815bcaa6bd7c7d3"
             .parse()
             .unwrap();
         Arbiter::spawn(async move {
