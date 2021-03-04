@@ -175,4 +175,57 @@ impl Web3 {
             }
         }))
     }
+
+    pub async fn get_erc20_name(
+        &self,
+        erc20: Address,
+        caller_address: Address,
+    ) -> Result<String, Web3Error> {
+        let name = self
+            .contract_call(erc20, "name()", &[], caller_address)
+            .await?;
+
+        match String::from_utf8(name) {
+            Ok(val) => Ok(val),
+            Err(_e) => Err(Web3Error::ContractCallError(
+                "name is not valid utf8".to_string(),
+            )),
+        }
+    }
+
+    pub async fn get_erc20_symbol(
+        &self,
+        erc20: Address,
+        caller_address: Address,
+    ) -> Result<String, Web3Error> {
+        let symbol = self
+            .contract_call(erc20, "symbol()", &[], caller_address)
+            .await?;
+
+        match String::from_utf8(symbol) {
+            Ok(val) => Ok(val),
+            Err(_e) => Err(Web3Error::ContractCallError(
+                "name is not valid utf8".to_string(),
+            )),
+        }
+    }
+
+    pub async fn get_erc20_decimals(
+        &self,
+        erc20: Address,
+        caller_address: Address,
+    ) -> Result<Uint256, Web3Error> {
+        let decimals = self
+            .contract_call(erc20, "decimals()", &[], caller_address)
+            .await?;
+
+        Ok(Uint256::from_bytes_be(match decimals.get(0..32) {
+            Some(val) => val,
+            None => {
+                return Err(Web3Error::ContractCallError(
+                    "Bad response from ERC20 decimals".to_string(),
+                ))
+            }
+        }))
+    }
 }
