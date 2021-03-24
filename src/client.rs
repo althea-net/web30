@@ -63,7 +63,7 @@ impl Web3 {
                 "eth_getFilterChanges",
                 vec![format!("{:#x}", filter_id.clone())],
                 self.timeout,
-                Some(5_000_000),
+                Some(10_000_000),
             )
             .await
     }
@@ -84,7 +84,7 @@ impl Web3 {
                 "eth_getLogs",
                 vec![new_filter],
                 self.timeout,
-                Some(5_000_000),
+                Some(10_000_000),
             )
             .await
     }
