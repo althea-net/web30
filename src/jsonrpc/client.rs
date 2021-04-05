@@ -1,21 +1,21 @@
 use crate::jsonrpc::error::Web3Error;
 use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
-use actix_web::client::Client;
-use actix_web::http::header;
+use awc::http::header;
+use awc::Client;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::str;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub struct HTTPClient {
+pub struct HttpClient {
     id_counter: Arc<Mutex<RefCell<u64>>>,
     url: String,
     client: Client,
 }
 
-impl HTTPClient {
+impl HttpClient {
     pub fn new(url: &str) -> Self {
         Self {
             id_counter: Arc::new(Mutex::new(RefCell::new(0u64))),
@@ -52,7 +52,7 @@ impl HTTPClient {
         let res = self
             .client
             .post(&self.url)
-            .header(header::CONTENT_TYPE, "application/json")
+            .append_header((header::CONTENT_TYPE, "application/json"))
             .timeout(timeout)
             .send_json(&payload)
             .await;
@@ -69,7 +69,7 @@ impl HTTPClient {
         let data = res.data.into_result();
         match data {
             Ok(r) => Ok(r),
-            Err(e) => Err(Web3Error::JsonRPCError {
+            Err(e) => Err(Web3Error::JsonRpcError {
                 code: e.code,
                 message: e.message,
                 data: format!("{:?}", e.data),

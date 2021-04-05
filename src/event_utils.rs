@@ -7,7 +7,7 @@ use clarity::{
 };
 use clarity::{Address, Uint256};
 use std::time::{Duration, Instant};
-use tokio::time::delay_for;
+use tokio::time::sleep as delay_for;
 
 /// takes an address and spits out an event, There's some argument to
 /// not use [u8; 32] for event definitions because of how much trouble
@@ -42,8 +42,7 @@ impl Web3 {
         local_filter: F,
     ) -> Result<Log, Web3Error> {
         let sig = derive_signature(event)?;
-        let mut final_topics = Vec::new();
-        final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
+        let mut final_topics = vec![Some(vec![Some(bytes_to_data(&sig))])];
         for topic in topics {
             let mut parts = Vec::new();
             for item in topic {
@@ -86,8 +85,7 @@ impl Web3 {
         local_filter: F,
     ) -> Result<Log, Web3Error> {
         let sig = derive_signature(event)?;
-        let mut final_topics = Vec::new();
-        final_topics.push(Some(vec![Some(bytes_to_data(&sig))]));
+        let mut final_topics = vec![Some(vec![Some(bytes_to_data(&sig))])];
         for topic in topics {
             let mut parts = Vec::new();
             for item in topic {

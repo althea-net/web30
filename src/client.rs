@@ -4,7 +4,7 @@
 //! work on big endian. We can do better than that just crafting our own
 //! JSONRPC requests.
 //!
-use crate::jsonrpc::client::HTTPClient;
+use crate::jsonrpc::client::HttpClient;
 use crate::jsonrpc::error::Web3Error;
 use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
 use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, UnpaddedHex, XdaiBlock};
@@ -14,20 +14,20 @@ use clarity::{Address, PrivateKey, Transaction};
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
-use tokio::time::delay_for;
+use tokio::time::sleep as delay_for;
 
 /// An instance of Web3Client.
 #[derive(Clone)]
 pub struct Web3 {
     url: String,
-    jsonrpc_client: Arc<Box<HTTPClient>>,
+    jsonrpc_client: Arc<Box<HttpClient>>,
     timeout: Duration,
 }
 
 impl Web3 {
     pub fn new(url: &str, timeout: Duration) -> Self {
         Self {
-            jsonrpc_client: Arc::new(Box::new(HTTPClient::new(url))),
+            jsonrpc_client: Arc::new(Box::new(HttpClient::new(url))),
             timeout,
             url: url.to_string(),
         }
@@ -472,72 +472,55 @@ impl Web3 {
 #[test]
 #[ignore]
 fn test_complex_response() {
-    use actix::Arbiter;
     use actix::System;
-    System::run(|| {
-        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-        let txid1 = "0x8b9ef028f99016cd3cb8d4168df7491a0bf44f08b678d37f63ab61e782c500ab"
-            .parse()
-            .unwrap();
-        Arbiter::spawn(async move {
-            let val = web3.eth_get_transaction_by_hash(txid1).await;
-            let val = val.expect("Actix failure");
-            let response = val.expect("Failed to parse transaction response");
-            assert!(response.block_number.unwrap() > 10u32.into());
-            System::current().stop();
-        });
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let txid1 = "0x8b9ef028f99016cd3cb8d4168df7491a0bf44f08b678d37f63ab61e782c500ab"
+        .parse()
+        .unwrap();
+    runner.block_on(async move {
+        let val = web3.eth_get_transaction_by_hash(txid1).await;
+        let val = val.expect("Actix failure");
+        let response = val.expect("Failed to parse transaction response");
+        assert!(response.block_number.unwrap() > 10u32.into());
     })
-    .expect("Actix failure");
 }
 
 #[test]
 fn test_transaction_count_response() {
-    use actix::Arbiter;
     use actix::System;
-    System::run(|| {
-        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-        let address: Address = "0x04668ec2f57cc15c381b461b9fedab5d451c8f7f"
-            .parse()
-            .unwrap();
-        Arbiter::spawn(async move {
-            let val = web3.eth_get_transaction_count(address).await;
-            let val = val.unwrap();
-            assert!(val > 0u32.into());
-            System::current().stop();
-        });
-    })
-    .expect("Actix failure");
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let address: Address = "0x04668ec2f57cc15c381b461b9fedab5d451c8f7f"
+        .parse()
+        .unwrap();
+    runner.block_on(async move {
+        let val = web3.eth_get_transaction_count(address).await;
+        let val = val.unwrap();
+        assert!(val > 0u32.into());
+    });
 }
 
 #[test]
 fn test_block_response() {
-    env_logger::init();
-    use actix::Arbiter;
     use actix::System;
-    System::run(|| {
-        let web3 = Web3::new("https://eth.altheamesh.com", Duration::from_secs(5));
-        Arbiter::spawn(async move {
-            let val = web3.eth_get_latest_block().await;
-            let val = val.expect("Actix failure");
-            assert!(val.number > 10u32.into());
-            System::current().stop();
-        });
-    })
-    .expect("Actix failure");
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.altheamesh.com", Duration::from_secs(5));
+    runner.block_on(async move {
+        let val = web3.eth_get_latest_block().await;
+        let val = val.expect("Actix failure");
+        assert!(val.number > 10u32.into());
+    });
 }
 
 #[test]
 fn test_dai_block_response() {
-    use actix::Arbiter;
     use actix::System;
-    System::run(|| {
-        let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(5));
-        Arbiter::spawn(async move {
-            let val = web3.xdai_get_latest_block().await;
-            let val = val.expect("Actix failure");
-            assert!(val.number > 10u32.into());
-            System::current().stop();
-        });
-    })
-    .expect("Actix failure");
+    let runner = System::new();
+    let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    runner.block_on(async move {
+        let val = web3.xdai_get_latest_block().await;
+        let val = val.expect("Actix failure");
+        assert!(val.number > 10u32.into());
+    });
 }

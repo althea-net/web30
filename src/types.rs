@@ -400,7 +400,6 @@ where
 mod tests {
     use super::*;
     use crate::client::Web3;
-    use actix::{Arbiter, System};
     use std::fs::read_to_string;
     use std::time::Duration;
 
@@ -408,22 +407,17 @@ mod tests {
     #[test]
     #[ignore]
     fn test_arbitrary_block() {
-        let res = System::run(move || {
-            Arbiter::spawn(async move {
-                let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-                let res = web3.eth_get_block_by_number(10750715u32.into()).await;
-                if res.is_err() {
-                    println!("{:?}", res);
-                    System::current().stop_with_code(1);
-                }
-
-                System::current().stop();
-            });
+        use actix::System;
+        env_logger::init();
+        let runner = System::new();
+        let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+        runner.block_on(async move {
+            let res = web3.eth_get_block_by_number(10750715u32.into()).await;
+            if res.is_err() {
+                println!("{:?}", res);
+                System::current().stop_with_code(1);
+            }
         });
-
-        if let Err(e) = res {
-            panic!(format!("{:?}", e))
-        }
     }
 
     #[test]

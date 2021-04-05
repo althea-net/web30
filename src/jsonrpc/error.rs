@@ -1,17 +1,17 @@
-use actix_web::client::SendRequestError as ActixError;
+use awc::error::SendRequestError as ActixError;
 use clarity::Error as ClarityError;
 use std::error::Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::num::ParseIntError;
-use tokio::time::Elapsed;
+use tokio::time::error::Elapsed;
 
 #[derive(Debug)]
 pub enum Web3Error {
     BadResponse(String),
     FailedToSend(ActixError),
-    JsonRPCError {
+    JsonRpcError {
         code: i64,
         message: String,
         data: String,
@@ -57,7 +57,7 @@ impl Display for Web3Error {
             Web3Error::CouldNotRemoveFilter(val) => {
                 write!(f, "Web3 Failed to remove filter from server {}", val)
             }
-            Web3Error::JsonRPCError {
+            Web3Error::JsonRpcError {
                 code,
                 message,
                 data,

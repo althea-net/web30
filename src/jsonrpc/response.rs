@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct JsonRPCError<E> {
+pub struct JsonRpcError<E> {
     pub code: i64,
     pub message: String,
     pub data: Option<E>,
@@ -10,13 +10,13 @@ pub struct JsonRPCError<E> {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum ResponseData<R, E> {
-    Error { error: JsonRPCError<E> },
+    Error { error: JsonRpcError<E> },
     Success { result: R },
 }
 
 impl<R, E> ResponseData<R, E> {
     /// Consume response and return value
-    pub fn into_result(self) -> Result<R, JsonRPCError<E>> {
+    pub fn into_result(self) -> Result<R, JsonRpcError<E>> {
         match self {
             ResponseData::Success { result } => Ok(result),
             ResponseData::Error { error } => Err(error),
