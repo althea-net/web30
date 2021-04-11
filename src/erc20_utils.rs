@@ -27,6 +27,7 @@ impl Web3 {
                 "allowance(address,address)",
                 &[own_address.into(), target_contract.into()],
                 own_address,
+                None,
             )
             .await?;
 
@@ -163,6 +164,7 @@ impl Web3 {
                 "balanceOf(address)",
                 &[target_address.into()],
                 target_address,
+                None,
             )
             .await?;
 
@@ -182,7 +184,7 @@ impl Web3 {
         caller_address: Address,
     ) -> Result<String, Web3Error> {
         let name = self
-            .contract_call(erc20, "name()", &[], caller_address)
+            .contract_call(erc20, "name()", &[], caller_address, None)
             .await?;
 
         match String::from_utf8(name) {
@@ -199,7 +201,7 @@ impl Web3 {
         caller_address: Address,
     ) -> Result<String, Web3Error> {
         let symbol = self
-            .contract_call(erc20, "symbol()", &[], caller_address)
+            .contract_call(erc20, "symbol()", &[], caller_address, None)
             .await?;
 
         match String::from_utf8(symbol) {
@@ -216,7 +218,7 @@ impl Web3 {
         caller_address: Address,
     ) -> Result<Uint256, Web3Error> {
         let decimals = self
-            .contract_call(erc20, "decimals()", &[], caller_address)
+            .contract_call(erc20, "decimals()", &[], caller_address, None)
             .await?;
 
         Ok(Uint256::from_bytes_be(match decimals.get(0..32) {

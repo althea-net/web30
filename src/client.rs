@@ -135,6 +135,15 @@ impl Web3 {
             .request_method("eth_call", (transaction, "latest"), self.timeout, None)
             .await
     }
+    pub async fn eth_call_at_height(
+        &self,
+        transaction: TransactionRequest,
+        block: Uint256,
+    ) -> Result<Data, Web3Error> {
+        self.jsonrpc_client
+            .request_method("eth_call", (transaction, block), self.timeout, None)
+            .await
+    }
     pub async fn eth_block_number(&self) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_blockNumber", Vec::<String>::new(), self.timeout, None)
@@ -392,12 +401,14 @@ impl Web3 {
     }
 
     /// Sends a transaction which does not change blockchain state, usually to get information.
+    /// optionally this data can come from some historic block
     pub async fn contract_call(
         &self,
         contract_address: Address,
         sig: &str,
         tokens: &[Token],
         own_address: Address,
+        height: Option<Uint256>,
     ) -> Result<Vec<u8>, Web3Error> {
         let our_balance = self.eth_get_balance(own_address).await?;
         let nonce = self.eth_get_transaction_count(own_address).await?;
@@ -419,11 +430,22 @@ impl Web3 {
             data: Some(Data(payload)),
         };
 
-        let bytes = match self.eth_call(transaction).await {
-            Ok(val) => val,
-            Err(e) => return Err(e),
-        };
-        Ok(bytes.0)
+        match height {
+            Some(height) => {
+                let bytes = match self.eth_call_at_height(transaction, height).await {
+                    Ok(val) => val,
+                    Err(e) => return Err(e),
+                };
+                Ok(bytes.0)
+            }
+            None => {
+                let bytes = match self.eth_call(transaction).await {
+                    Ok(val) => val,
+                    Err(e) => return Err(e),
+                };
+                Ok(bytes.0)
+            }
+        }
     }
 
     /// Waits for a transaction with the given hash to be included in a block
