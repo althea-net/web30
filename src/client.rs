@@ -11,6 +11,7 @@ use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, UnpaddedH
 use clarity::abi::{encode_call, Token};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
+use num::ToPrimitive;
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
@@ -307,7 +308,7 @@ impl Web3 {
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
         let mut gas_price = None;
-        let mut gas_price_multiplier = 1u64.into();
+        let mut gas_price_multiplier = 1f32;
         let mut gas_limit = None;
         let mut network_id = None;
         let our_balance = self.eth_get_balance(own_address).await?;
@@ -326,7 +327,17 @@ impl Web3 {
         let mut gas_price = if let Some(gp) = gas_price {
             gp
         } else {
-            self.eth_gas_price().await? * gas_price_multiplier
+            let gas_price = self.eth_gas_price().await?;
+            let f32_gas = gas_price.to_u128();
+            if let Some(v) = f32_gas {
+                // convert to f32, multiply, then convert back, this
+                // will be lossy but you want an exact price you can set it
+                ((v as f32 * gas_price_multiplier) as u128).into()
+            } else {
+                // gas price is insanely high, best effort rounding
+                // perhaps we should panic here
+                gas_price * (gas_price_multiplier.round() as u128).into()
+            }
         };
 
         let gas_limit = if let Some(gl) = gas_limit {
