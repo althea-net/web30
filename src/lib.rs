@@ -12,11 +12,14 @@ extern crate num256;
 extern crate tokio;
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod client;
 mod erc20_utils;
 mod event_utils;
 pub mod jsonrpc;
 pub mod types;
+pub mod amm;
 
 pub use event_utils::address_to_event;
