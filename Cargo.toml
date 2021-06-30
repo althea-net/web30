@@ -16,6 +16,7 @@ futures = "0.3"
 awc = {version = "3.0.0-beta.5", default-features = false, features=["openssl", "compress"]}
 tokio = {version = "1.4", features=["macros", "time"]}
 actix = "0.11"
+lazy_static = "1.4"
 log = "0.4"
 num = "0.4"
 
