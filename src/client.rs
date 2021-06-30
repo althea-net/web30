@@ -46,6 +46,17 @@ impl Web3 {
             .request_method("eth_accounts", Vec::<String>::new(), self.timeout, None)
             .await
     }
+
+    /// Returns the EIP155 chain ID used for transaction signing at the current best block. Null is returned if not available.
+    pub async fn eth_chainid(&self) -> Result<Option<Uint256>, Web3Error> {
+        let ret: Result<Uint256, Web3Error> = self
+            .jsonrpc_client
+            .request_method("eth_chainId", Vec::<String>::new(), self.timeout, None)
+            .await;
+
+        Ok(Some(ret?))
+    }
+
     pub async fn net_version(&self) -> Result<u64, Web3Error> {
         let ret: Result<String, Web3Error> = self
             .jsonrpc_client
@@ -53,6 +64,7 @@ impl Web3 {
             .await;
         Ok(ret?.parse()?)
     }
+
     pub async fn eth_new_filter(&self, new_filter: NewFilter) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_newFilter", vec![new_filter], self.timeout, None)
@@ -503,7 +515,33 @@ impl Web3 {
 }
 
 #[test]
-#[ignore]
+fn test_chain_id() {
+    use actix::System;
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    runner.block_on(async move {
+        assert_eq!(Some(Uint256::from(1u8)), web3.eth_chainid().await.unwrap());
+        assert_eq!(
+            Some(Uint256::from(100u8)),
+            web3_xdai.eth_chainid().await.unwrap()
+        );
+    })
+}
+
+#[test]
+fn test_net_version() {
+    use actix::System;
+    let runner = System::new();
+    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    runner.block_on(async move {
+        assert_eq!(1u64, web3.net_version().await.unwrap());
+        assert_eq!(100u64, web3_xdai.net_version().await.unwrap());
+    })
+}
+
+#[test]
 fn test_complex_response() {
     use actix::System;
     let runner = System::new();
