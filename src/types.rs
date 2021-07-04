@@ -223,6 +223,10 @@ pub struct Block {
     pub gas_limit: Uint256,
     #[serde(rename = "gasUsed")]
     pub gas_used: Uint256,
+    /// this field will not exist until after
+    /// the london hardfork
+    #[serde(rename = "baseFeePerGas")]
+    pub base_fee_per_gas: Option<Uint256>,
     pub hash: Uint256,
     #[serde(rename = "logsBloom")]
     pub logs_bloom: Data,
@@ -308,6 +312,10 @@ pub struct ConciseBlock {
     pub gas_limit: Uint256,
     #[serde(rename = "gasUsed")]
     pub gas_used: Uint256,
+    /// this field will not exist until after
+    /// the london hardfork
+    #[serde(rename = "baseFeePerGas")]
+    pub base_fee_per_gas: Option<Uint256>,
     pub hash: Uint256,
     #[serde(rename = "logsBloom")]
     pub logs_bloom: Data,

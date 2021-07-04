@@ -37,6 +37,7 @@ impl Web3 {
     pub fn get_timeout(&self) -> Duration {
         self.timeout
     }
+
     pub fn get_url(&self) -> String {
         self.url.clone()
     }
@@ -70,6 +71,7 @@ impl Web3 {
             .request_method("eth_newFilter", vec![new_filter], self.timeout, None)
             .await
     }
+
     pub async fn eth_get_filter_changes(&self, filter_id: Uint256) -> Result<Vec<Log>, Web3Error> {
         self.jsonrpc_client
             .request_method(
@@ -80,6 +82,7 @@ impl Web3 {
             )
             .await
     }
+
     pub async fn eth_uninstall_filter(&self, filter_id: Uint256) -> Result<bool, Web3Error> {
         self.jsonrpc_client
             .request_method(
@@ -117,6 +120,7 @@ impl Web3 {
             .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout, None)
             .await
     }
+
     pub async fn eth_estimate_gas(
         &self,
         transaction: TransactionRequest,
@@ -125,6 +129,7 @@ impl Web3 {
             .request_method("eth_estimateGas", vec![transaction], self.timeout, None)
             .await
     }
+
     pub async fn eth_get_balance(&self, address: Address) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method(
@@ -135,6 +140,7 @@ impl Web3 {
             )
             .await
     }
+
     pub async fn eth_send_transaction(
         &self,
         transactions: Vec<TransactionRequest>,
@@ -143,11 +149,13 @@ impl Web3 {
             .request_method("eth_sendTransaction", transactions, self.timeout, None)
             .await
     }
+
     pub async fn eth_call(&self, transaction: TransactionRequest) -> Result<Data, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_call", (transaction, "latest"), self.timeout, None)
             .await
     }
+
     pub async fn eth_call_at_height(
         &self,
         transaction: TransactionRequest,
@@ -157,6 +165,7 @@ impl Web3 {
             .request_method("eth_call", (transaction, block), self.timeout, None)
             .await
     }
+
     pub async fn eth_block_number(&self) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("eth_blockNumber", Vec::<String>::new(), self.timeout, None)
@@ -355,35 +364,13 @@ impl Web3 {
         let gas_limit = if let Some(gl) = gas_limit {
             gl
         } else {
-            // Geth and parity behave differently for the Estimate gas call
-            // Parity / OpenEthereum will allow you to specify no gas price
-            // and no gas amount the estimate gas call will then return the
-            // amount of gas the transaction would take. This is reasonable behavior
-            // from an endpoint that's supposed to let you estimate gas usage
-            //
-            // The gas price is of course irrelevant unless someone goes out of their
-            // way to design a contract that fails a low gas prices. Geth and Parity
-            // can't simulate an actual transaction market accurately.
-            //
-            // Geth on the other hand insists that you provide a gas price (any price)
-            // and a gas value. Otherwise it will not provide an estimate.
-            //
-            // If this value is too low Geth will fail, if this value is higher than
-            // your balance Geth will once again fail. So Geth at this juncture won't
-            // tell you what the transaction would cost, just that you can't afford it.
-            //
-            // So if yes you could set these values to none if making a parity request
-            let gas_price: Uint256 = 1u8.into();
-            // Geth represents gas as a u64 it will truncate leading zeros but not take
-            // a value larger than u64::MAX, likewise the command will fail if we can't
-            // actually pay that fee. This operation maximizes the info we can get
-            let gas_limit = min((u64::MAX - 1).into(), our_balance.clone());
+            let gas = self.simulated_gas_price_and_limit(our_balance.clone()).await?;
             self.eth_estimate_gas(TransactionRequest {
                 from: Some(own_address),
                 to: to_address,
                 nonce: Some(nonce.clone().into()),
-                gas_price: Some(gas_price.into()),
-                gas: Some(gas_limit.into()),
+                gas_price: Some(gas.price.into()),
+                gas: Some(gas.limit.into()),
                 value: Some(value.clone().into()),
                 data: Some(data.clone().into()),
             })
@@ -438,17 +425,13 @@ impl Web3 {
 
         let payload = encode_call(sig, tokens)?;
 
-        let gas_price: Uint256 = 1u8.into();
-        // Geth represents gas as a u64 it will truncate leading zeros but not take
-        // a value larger than u64::MAX, likewise the command will fail if we can't
-        // actually pay that fee. This operation maximizes the info we can get
-        let gas_limit = min((u64::MAX - 1).into(), our_balance);
+        let gas = self.simulated_gas_price_and_limit(our_balance).await?;
         let transaction = TransactionRequest {
             from: Some(own_address),
             to: contract_address,
             nonce: Some(UnpaddedHex(nonce)),
-            gas: Some(gas_limit.into()),
-            gas_price: Some(UnpaddedHex(gas_price)),
+            gas: Some(gas.limit.into()),
+            gas_price: Some(UnpaddedHex(gas.price)),
             value: Some(UnpaddedHex(0u64.into())),
             data: Some(Data(payload)),
         };
@@ -512,6 +495,62 @@ impl Web3 {
             }
         }
     }
+
+    /// Geth and parity behave differently for the Estimate gas call or eth_call()
+    /// Parity / OpenEthereum will allow you to specify no gas price
+    /// and no gas amount the estimate gas call will then return the
+    /// amount of gas the transaction would take. This is reasonable behavior
+    /// from an endpoint that's supposed to let you estimate gas usage
+    ///
+    /// The gas price is of course irrelevant unless someone goes out of their
+    /// way to design a contract that fails a low gas prices. Geth and Parity
+    /// can't simulate an actual transaction market accurately.
+    ///
+    /// Geth on the other hand insists that you provide a gas price of at least
+    /// 7 post London hardfork in order to respond. This seems to be because Geth
+    /// simply tosses your transaction into the actual execution code, so no gas
+    /// instantly fails.
+    ///
+    /// If this value is too low Geth will fail, if this value is higher than
+    /// your balance Geth will once again fail. So Geth at this juncture won't
+    /// tell you what the transaction would cost, just that you can't afford it.
+    ///
+    /// Max possible gas price is Uint 32 max, Geth will print warnings above 25mil
+    /// gas.
+    ///
+    /// This function will navigate all these restrictions in order to give you the
+    /// maximum valid gas possible for any simulated call
+    async fn simulated_gas_price_and_limit(
+        &self,
+        balance: Uint256,
+    ) -> Result<SimulatedGas, Web3Error> {
+        let block = self.eth_get_latest_block().await;
+        let test = self.xdai_get_latest_block().await;
+        // handle the xdai case, at least until xDai upgrades to London, this is needed
+        // because getting the eth block may fail spuriously on xdai
+        if block.is_err() && test.is_ok() {
+            let price: Uint256 = 1u8.into();
+            let limit = min(25_000_000u128.into(), balance / price.clone());
+            return Ok(SimulatedGas { limit, price });
+        }
+
+        // we are on Eth, now we need to see if it's pre or post London
+        let block = block?;
+        let price = if let Some(base_gas) = block.base_fee_per_gas {
+            // post London
+            base_gas
+        } else {
+            // pre London
+            1u8.into()
+        };
+        let limit = min(25_000_000u128.into(), balance / price.clone());
+        Ok(SimulatedGas { limit, price })
+    }
+}
+
+struct SimulatedGas {
+    limit: Uint256,
+    price: Uint256,
 }
 
 #[test]
