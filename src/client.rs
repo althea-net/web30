@@ -364,7 +364,9 @@ impl Web3 {
         let gas_limit = if let Some(gl) = gas_limit {
             gl
         } else {
-            let gas = self.simulated_gas_price_and_limit(our_balance.clone()).await?;
+            let gas = self
+                .simulated_gas_price_and_limit(our_balance.clone())
+                .await?;
             self.eth_estimate_gas(TransactionRequest {
                 from: Some(own_address),
                 to: to_address,
@@ -516,7 +518,7 @@ impl Web3 {
     /// tell you what the transaction would cost, just that you can't afford it.
     ///
     /// Max possible gas price is Uint 32 max, Geth will print warnings above 25mil
-    /// gas.
+    /// gas, hardhat will error above 12.45 mil gas. So we select the minimum of these
     ///
     /// This function will navigate all these restrictions in order to give you the
     /// maximum valid gas possible for any simulated call
@@ -524,13 +526,14 @@ impl Web3 {
         &self,
         balance: Uint256,
     ) -> Result<SimulatedGas, Web3Error> {
+        const GAS_LIMIT: u128 = 12450000;
         let block = self.eth_get_latest_block().await;
         let test = self.xdai_get_latest_block().await;
         // handle the xdai case, at least until xDai upgrades to London, this is needed
         // because getting the eth block may fail spuriously on xdai
         if block.is_err() && test.is_ok() {
             let price: Uint256 = 1u8.into();
-            let limit = min(25_000_000u128.into(), balance / price.clone());
+            let limit = min(GAS_LIMIT.into(), balance / price.clone());
             return Ok(SimulatedGas { limit, price });
         }
 
@@ -543,7 +546,7 @@ impl Web3 {
             // pre London
             1u8.into()
         };
-        let limit = min(25_000_000u128.into(), balance / price.clone());
+        let limit = min(GAS_LIMIT.into(), balance / price.clone());
         Ok(SimulatedGas { limit, price })
     }
 }
