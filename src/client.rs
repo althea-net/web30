@@ -605,11 +605,6 @@ struct SimulatedGas {
     price: Uint256,
 }
 
-struct SimulatedGas {
-    limit: Uint256,
-    price: Uint256,
-}
-
 // Geth and parity behave differently for the Estimate gas call or eth_call()
 // Parity / OpenEthereum will allow you to specify no gas price
 // and no gas amount the estimate gas call will then return the

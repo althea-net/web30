@@ -1,8 +1,9 @@
-use crate::{client::Web3, jsonrpc::error::Web3Error};
+// Performs interactions with AMMs (Automated Market Makers) on ethereum
+use crate::{client::Web3, jsonrpc::error::Web3Error, types::SendTxOption};
 use clarity::{
-    abi::Token,
+    abi::{Token, encode_call},
     constants::{TT160M1, TT24M1},
-    Address, Uint256,
+    Address, PrivateKey, Uint256,
 };
 
 lazy_static! {
@@ -30,31 +31,30 @@ impl Web3 {
         sqrt_price_limit_x96_uint160: Uint256, // Actually a uint160 on the callee side
         uniswap_quoter: Option<Address>, // The default quoter will be used if none is provided
     ) -> Result<Uint256, Web3Error> {
-        let quoter = match uniswap_quoter {
-            Some(val) => val,
-            None => *UNISWAP_QUOTER_ADDRESS,
-        };
+        let quoter = get_quoter_or_default(uniswap_quoter);
 
-        if fee_uint24 > *TT24M1 {
+        if bad_fee(&fee_uint24) {
             return Err(Web3Error::BadInput(
                 "Bad fee input to swap price - value too large for uint24".to_string(),
             ));
         }
-        if sqrt_price_limit_x96_uint160 > *TT160M1 {
+
+        if bad_sqrt_price_limit(&sqrt_price_limit_x96_uint160) {
             return Err(Web3Error::BadInput(
                 "Bad sqrt_price_limit_x96 input to swap price - value too large for uint160"
                     .to_string(),
             ));
         }
 
-        let tokens: &[Token] = &[
+        let tokens: [Token; 5] = [
             Token::Address(token_in),
             Token::Address(token_out),
             Token::Uint(fee_uint24),
             Token::Uint(amount),
             Token::Uint(sqrt_price_limit_x96_uint160),
         ];
-        debug!("tokens is {:?}", tokens);
+
+        println!("tokens is  {:?}", tokens);
         let result = self
             .contract_call(
                 quoter,
@@ -64,7 +64,7 @@ impl Web3 {
                 None,
             )
             .await?;
-        debug!("result is {:?}", result);
+        println!("result is {:?}", result);
         Ok(Uint256::from_bytes_be(match result.get(0..32) {
             Some(val) => val,
             None => {
@@ -74,6 +74,95 @@ impl Web3 {
             }
         }))
     }
+
+    // Performs a swap using uniswap by calling exactInputSingle(struct) on quoter or a default uniswap address
+    pub async fn swap_uniswap(
+        &self,
+        eth_private_key: PrivateKey,           // The address swapping tokens
+        token_in: Address,                     // The token held
+        token_out: Address,                    // The desired token
+        fee_uint24: Uint256,                   // Actually a uint24 on the callee side
+        amount: Uint256,                       // The amount of tokens offered up
+        deadline: Uint256,                     // A deadline by which the swap must happen
+        amount_out_min: Uint256,               // The minimum output tokens to receive in a swap
+        sqrt_price_limit_x96_uint160: Uint256, // Actually a uint160 on the callee side
+        uniswap_quoter: Option<Address>,       // The default quoter will be used if None is provided
+        options: Option<Vec<SendTxOption>>,    // Options for send_transaction
+    ) -> Result<Uint256, Web3Error> {
+        if bad_fee(&fee_uint24) {
+            return Err(Web3Error::BadInput(
+                "Bad fee input to swap_uniswap - value too large for uint24".to_string(),
+            ));
+        }
+
+        if bad_sqrt_price_limit(&sqrt_price_limit_x96_uint160) {
+            return Err(Web3Error::BadInput(
+                "Bad sqrt_price_limit_x96 input to swap_uniswap - value too large for uint160"
+                    .to_string(),
+            ));
+        }
+
+        let own_address = eth_private_key.to_public_key().unwrap();
+        let quoter = get_quoter_or_default(uniswap_quoter);
+        //struct ExactInputSingleParams { // The uniswap exactInputSingle argument
+        //    address tokenIn;
+        //    address tokenOut;
+        //    uint24 fee;
+        //    address recipient;
+        //    uint256 deadline;
+        //    uint256 amountIn;
+        //    uint256 amountOutMinimum;
+        //    uint160 sqrtPriceLimitX96;
+        //}
+        let tokens: Vec<Token> = vec![
+            Token::Address(token_in),
+            Token::Address(token_out),
+            Token::Uint(fee_uint24),
+            Token::Address(own_address),
+            Token::Uint(deadline),
+            Token::Uint(amount),
+            Token::Uint(amount_out_min),
+            Token::Uint(sqrt_price_limit_x96_uint160)
+        ];
+        let tokens = [Token::Struct(tokens)];
+        let payload = encode_call("exactInputSingle(struct)", &tokens).unwrap();
+        let options = match options {
+            Some(vec) => vec,
+            None => vec![]
+        };
+
+        println!("payload is  {:?}", payload);
+        let result = self
+            .send_transaction(
+                quoter,
+                payload,
+                0u32.into(),
+                own_address,
+                eth_private_key,
+                options,
+            )
+            .await?;
+        println!("result is {:?}", result);
+        Ok(result)
+    }
+}
+
+// Returns the quoter specified, or a default one
+fn get_quoter_or_default(uniswap_quoter: Option<Address>) -> Address {
+    match uniswap_quoter {
+        Some(val) => val,
+        None => *UNISWAP_QUOTER_ADDRESS,
+    }
+}
+
+// Checks that the input fee value is within the limits of uint24
+fn bad_fee(fee: &Uint256) -> bool {
+    return *fee > *TT24M1;
+}
+
+// Checks that the input sqrt_price_limit value is within the limits of uint160
+fn bad_sqrt_price_limit(sqrt_price_limit: &Uint256) -> bool {
+    return *sqrt_price_limit > *TT160M1;
 }
 
 #[test]
@@ -81,7 +170,7 @@ fn get_uniswap_price_test() {
     use actix::System;
     use env_logger::{Builder, Env};
     use std::time::Duration;
-    Builder::from_env(Env::default().default_filter_or("warn")).init(); // Change to debug for logs
+    Builder::from_env(Env::default().default_filter_or("debug")).init(); // Change to debug for logs
     let runner = System::new();
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     let caller_address =
