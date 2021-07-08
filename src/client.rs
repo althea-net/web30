@@ -13,6 +13,7 @@ use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use num::ToPrimitive;
 use num256::Uint256;
+use std::cmp::max;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
 use tokio::time::sleep as delay_for;
@@ -115,10 +116,20 @@ impl Web3 {
             )
             .await
     }
+
+    /// Get the median gas price over the last 10 blocks. This function does not
+    /// simply wrap eth_gasPrice, in post London chains it also requests the base
+    /// gas from the previous block and prevents the use of a lower value
     pub async fn eth_gas_price(&self) -> Result<Uint256, Web3Error> {
-        self.jsonrpc_client
+        let median_gas = self
+            .jsonrpc_client
             .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout, None)
-            .await
+            .await?;
+        let base_gas = self.get_base_fee_per_gas().await?;
+        Ok(match base_gas {
+            Some(base_gas) => max(base_gas, median_gas),
+            None => median_gas,
+        })
     }
 
     pub async fn eth_estimate_gas(
@@ -279,6 +290,7 @@ impl Web3 {
             )
             .await
     }
+
     pub async fn eth_get_transaction_by_hash(
         &self,
         hash: Uint256,
@@ -294,11 +306,13 @@ impl Web3 {
             )
             .await
     }
+
     pub async fn evm_snapshot(&self) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method("evm_snapshot", Vec::<String>::new(), self.timeout, None)
             .await
     }
+
     pub async fn evm_revert(&self, snapshot_id: Uint256) -> Result<Uint256, Web3Error> {
         self.jsonrpc_client
             .request_method(
@@ -387,8 +401,21 @@ impl Web3 {
 
         // this is an edge case where we are about to send a transaction that can't possibly
         // be valid, we simply don't have the the funds to pay the full gas amount we are promising
-        // in this case we reduce the gas price to exactly what we can afford.
+        // this segment computes either the highest valid gas price we can pay or in the post-london
+        // chain case errors if we can't meet the minimum fee
         if gas_price.clone() * gas_limit.clone() > our_balance {
+            let base_fee_per_gas = self.get_base_fee_per_gas().await?;
+            if let Some(base_fee_per_gas) = base_fee_per_gas {
+                if base_fee_per_gas.clone() * gas_limit.clone() > our_balance {
+                    return Err(Web3Error::InsufficientGas {
+                        balance: our_balance,
+                        base_gas: base_fee_per_gas,
+                        gas_required: gas_limit,
+                    });
+                }
+            }
+            // this will give some value >= base_fee_per_gas * gas_limit
+            // in post-london and some non zero value in pre-london
             gas_price = our_balance / gas_limit.clone();
         }
 
@@ -527,30 +554,54 @@ impl Web3 {
         balance: Uint256,
     ) -> Result<SimulatedGas, Web3Error> {
         const GAS_LIMIT: u128 = 12450000;
-        let block = self.eth_get_latest_block().await;
-        let test = self.xdai_get_latest_block().await;
-        // handle the xdai case, at least until xDai upgrades to London, this is needed
-        // because getting the eth block may fail spuriously on xdai
-        if block.is_err() && test.is_ok() {
-            let price: Uint256 = 1u8.into();
-            let limit = min(GAS_LIMIT.into(), balance / price.clone());
-            return Ok(SimulatedGas { limit, price });
-        }
-
-        // we are on Eth, now we need to see if it's pre or post London
-        let block = block?;
-        let price = if let Some(base_gas) = block.base_fee_per_gas {
+        let base_fee_per_gas = self.get_base_fee_per_gas().await?;
+        let price = match base_fee_per_gas {
             // post London
-            base_gas
-        } else {
+            Some(base_gas) => base_gas,
             // pre London
-            1u8.into()
+            None => 1u8.into(),
         };
         let limit = min(GAS_LIMIT.into(), balance / price.clone());
         Ok(SimulatedGas { limit, price })
     }
-}
 
+    /// Navigates the block request process to properly identify the base fee no matter
+    /// what network (xDai or ETH) is being used. Returns `None` if a pre-London fork
+    /// network is in use and `Some(base_fee_per_gas)` if a post London network is in
+    /// use
+    async fn get_base_fee_per_gas(&self) -> Result<Option<Uint256>, Web3Error> {
+        let eth = self.eth_get_latest_block().await;
+        let xdai = self.xdai_get_latest_block().await;
+        // we don't know what network we're on, so we request both blocks and
+        // see which one succeeds. This could in theory be removed if we
+        // combine the eth and xdai blocks or require some sort of flag on init
+        // for the web30 struct
+        match (eth, xdai) {
+            // this case is confusing, I'm pretty sure, but not 100% sure that
+            // it's impossible. That being said we better handle it just to be safe
+            // if we have some polyglot block that is interpretable through both types
+            // this entire section contains a lot of guesswork for cases that will probably
+            // never happen
+            (Ok(eth_block), Ok(xdai_block)) => {
+                warn!("Found polyglot blocks! {:?} {:?}", eth_block, xdai_block);
+                match (eth_block.base_fee_per_gas, xdai_block.base_fee_per_gas) {
+                    // polyglot block, these values should be identical, but take the max
+                    (Some(base_gas_a), Some(base_gas_b)) => Ok(Some(max(base_gas_a, base_gas_b))),
+                    // this is event more crazy than a polyglot block, the field name is the same
+                    // nevertheless we should take the value that exists
+                    (Some(base_gas), None) | (None, Some(base_gas)) => Ok(Some(base_gas)),
+
+                    (None, None) => Ok(None),
+                }
+            }
+            (Err(_), Ok(block)) => Ok(block.base_fee_per_gas),
+            (Ok(block), Err(_)) => Ok(block.base_fee_per_gas),
+            // if both error it's probably the same error so lets pick the first
+            // and return it
+            (Err(e), Err(_)) => Err(e),
+        }
+    }
+}
 struct SimulatedGas {
     limit: Uint256,
     price: Uint256,

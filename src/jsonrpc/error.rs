@@ -1,5 +1,6 @@
 use awc::error::SendRequestError as ActixError;
 use clarity::Error as ClarityError;
+use clarity::Uint256;
 use std::error::Error;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -15,6 +16,11 @@ pub enum Web3Error {
         code: i64,
         message: String,
         data: String,
+    },
+    InsufficientGas {
+        balance: Uint256,
+        base_gas: Uint256,
+        gas_required: Uint256,
     },
     BadInput(String),
     EventNotFound(String),
@@ -51,6 +57,14 @@ impl Display for Web3Error {
             Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
             Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
             Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
+            Web3Error::InsufficientGas {
+                balance,
+                base_gas,
+                gas_required,
+            } => {
+                write!(f, "Block has base_fee_per_gas {} and transaction requires {} gas. Your balance of {} < {}. Transaction impossible",
+            base_gas, gas_required, balance, base_gas.clone() * gas_required.clone())
+            }
             Web3Error::ContractCallError(val) => {
                 write!(f, "Error performing Ethereum contract call {}", val)
             }
