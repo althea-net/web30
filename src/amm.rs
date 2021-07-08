@@ -125,7 +125,11 @@ impl Web3 {
             Token::Uint(sqrt_price_limit_x96_uint160)
         ];
         let tokens = [Token::Struct(tokens)];
-        let payload = encode_call("exactInputSingle(struct)", &tokens).unwrap();
+        //let payload = encode_call("exactInputSingle(struct)", &tokens).unwrap();
+        let mut wtr = vec![];
+        wtr.extend(&clarity::abi::derive_method_id("exactInputSingle(struct)")?);
+        wtr.extend(clarity::abi::encode_tokens(&tokens));
+        let payload = wtr;
         let options = match options {
             Some(vec) => vec,
             None => vec![]
