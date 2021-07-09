@@ -75,7 +75,7 @@ impl Web3 {
         }))
     }
 }
-
+#[ignore]
 #[test]
 fn get_uniswap_price_test() {
     use actix::System;
