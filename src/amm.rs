@@ -75,8 +75,8 @@ impl Web3 {
         }))
     }
 }
-
 #[test]
+#[ignore]
 fn get_uniswap_price_test() {
     use actix::System;
     use env_logger::{Builder, Env};
