@@ -633,7 +633,7 @@ fn test_net_version() {
         assert_eq!(100u64, web3_xdai.net_version().await.unwrap());
     })
 }
-
+#[ignore]
 #[test]
 fn test_complex_response() {
     use actix::System;

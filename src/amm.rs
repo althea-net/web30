@@ -263,7 +263,7 @@ pub fn uniswap_sqrt_price(amount_1: Uint256, amount_0: Uint256) -> Uint256 {
     let ratio_x192 = numerator / denominator;
     Uint256(BigUint::sqrt(&ratio_x192))
 }
-
+#[ignore]
 #[test]
 fn get_uniswap_price_test() {
     use actix::System;
