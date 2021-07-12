@@ -1,4 +1,5 @@
 use clarity::abi::Token;
+use clarity::Address;
 use clarity::{abi::encode_call, PrivateKey, Uint256};
 
 use crate::amm::WETH_CONTRACT_ADDRESS;
@@ -10,33 +11,30 @@ impl Web3 {
         &self,
         amount: Uint256,
         secret: PrivateKey,
+        weth_address: Option<Address>,
     ) -> Result<Uint256, Web3Error> {
         let own_address = secret.to_public_key().unwrap();
         let sig = "deposit()";
         let tokens = [];
         let payload = encode_call(sig, &tokens).unwrap();
-        self.send_transaction(
-            *WETH_CONTRACT_ADDRESS,
-            payload,
-            amount,
-            own_address,
-            secret,
-            vec![],
-        )
-        .await
+        let weth_address = weth_address.unwrap_or(*WETH_CONTRACT_ADDRESS);
+        self.send_transaction(weth_address, payload, amount, own_address, secret, vec![])
+            .await
     }
 
     pub async fn unwrap_eth(
         &self,
         amount: Uint256,
         secret: PrivateKey,
+        weth_address: Option<Address>,
     ) -> Result<Uint256, Web3Error> {
         let own_address = secret.to_public_key().unwrap();
         let sig = "withdraw(uint256)";
         let tokens = [Token::Uint(amount)];
         let payload = encode_call(sig, &tokens).unwrap();
+        let weth_address = weth_address.unwrap_or(*WETH_CONTRACT_ADDRESS);
         self.send_transaction(
-            *WETH_CONTRACT_ADDRESS,
+            weth_address,
             payload,
             0u16.into(),
             own_address,
