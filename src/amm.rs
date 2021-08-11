@@ -38,9 +38,9 @@ impl Web3 {
     /// * `uniswap_quoter` - Optional address of the Uniswap v3 quoter to contact
     ///
     /// # Examples
-    /// ```
+    /// ```rust,ignore
     /// use std::time::Duration;
-    /// use std::from::FromStr;
+    /// use std::str::FromStr;
     /// use clarity::Address;
     /// use clarity::Uint256;
     /// use web30::amm::*;

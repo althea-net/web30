@@ -24,7 +24,7 @@ pub fn address_to_event(address: Address) -> [u8; 32] {
 
 fn bytes_to_data(s: &[u8]) -> String {
     let mut val = "0x".to_string();
-    val.push_str(&bytes_to_hex_str(&s));
+    val.push_str(&bytes_to_hex_str(s));
     val
 }
 
