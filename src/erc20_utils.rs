@@ -21,14 +21,12 @@ impl Web3 {
         own_address: Address,
         target_contract: Address,
     ) -> Result<bool, Web3Error> {
+        let payload = encode_call(
+            "allowance(address,address)",
+            &[own_address.into(), target_contract.into()],
+        )?;
         let allowance = self
-            .contract_call(
-                erc20,
-                "allowance(address,address)",
-                &[own_address.into(), target_contract.into()],
-                own_address,
-                None,
-            )
+            .simulate_transaction(erc20, 0u8.into(), payload, own_address, None)
             .await?;
 
         let allowance = Uint256::from_bytes_be(match allowance.get(0..32) {
@@ -158,14 +156,9 @@ impl Web3 {
         erc20: Address,
         target_address: Address,
     ) -> Result<Uint256, Web3Error> {
+        let payload = encode_call("balanceOf(address)", &[target_address.into()])?;
         let balance = self
-            .contract_call(
-                erc20,
-                "balanceOf(address)",
-                &[target_address.into()],
-                target_address,
-                None,
-            )
+            .simulate_transaction(erc20, 0u8.into(), payload, target_address, None)
             .await?;
 
         Ok(Uint256::from_bytes_be(match balance.get(0..32) {
@@ -183,8 +176,9 @@ impl Web3 {
         erc20: Address,
         caller_address: Address,
     ) -> Result<String, Web3Error> {
+        let payload = encode_call("name()", &[])?;
         let name = self
-            .contract_call(erc20, "name()", &[], caller_address, None)
+            .simulate_transaction(erc20, 0u8.into(), payload, caller_address, None)
             .await?;
 
         match String::from_utf8(name) {
@@ -200,8 +194,9 @@ impl Web3 {
         erc20: Address,
         caller_address: Address,
     ) -> Result<String, Web3Error> {
+        let payload = encode_call("symbol()", &[])?;
         let symbol = self
-            .contract_call(erc20, "symbol()", &[], caller_address, None)
+            .simulate_transaction(erc20, 0u8.into(), payload, caller_address, None)
             .await?;
 
         match String::from_utf8(symbol) {
@@ -217,8 +212,9 @@ impl Web3 {
         erc20: Address,
         caller_address: Address,
     ) -> Result<Uint256, Web3Error> {
+        let payload = encode_call("decimals()", &[])?;
         let decimals = self
-            .contract_call(erc20, "decimals()", &[], caller_address, None)
+            .simulate_transaction(erc20, 0u8.into(), payload, caller_address, None)
             .await?;
 
         Ok(Uint256::from_bytes_be(match decimals.get(0..32) {
