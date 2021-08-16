@@ -7,8 +7,7 @@
 use crate::jsonrpc::client::HttpClient;
 use crate::jsonrpc::error::Web3Error;
 use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
-use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, UnpaddedHex, XdaiBlock};
-use clarity::abi::{encode_call, Token};
+use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, XdaiBlock};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use num::ToPrimitive;
@@ -439,30 +438,36 @@ impl Web3 {
         .await
     }
 
-    /// Sends a transaction which does not change blockchain state, usually to get information.
+    /// Simulates an Ethereum contract call by making a fake transaction and sending it to a special endpoint
+    /// this code is executed exactly as if it where an actual transaction executing. This can be used to execute
+    /// both getter endpoints on Solidity contracts and to test actual executions. User beware, this function requires
+    /// ETH in the caller address to run. Even if you're just trying to call a getter function and never need to actually
+    /// run code this faithful simulation will fail if you have no ETH to pay for gas.
+    ///
+    /// In an attempt to maximize the amount of info you can get with this function gas is computed for you as the maximum
+    /// possible value, if you need to get  gas estimation you should use `web3.eth_estimate_gas` instead.
+    ///
     /// optionally this data can come from some historic block
-    pub async fn contract_call(
+    pub async fn simulate_transaction(
         &self,
         contract_address: Address,
-        sig: &str,
-        tokens: &[Token],
+        value: Uint256,
+        data: Vec<u8>,
         own_address: Address,
         height: Option<Uint256>,
     ) -> Result<Vec<u8>, Web3Error> {
         let our_balance = self.eth_get_balance(own_address).await?;
         let nonce = self.eth_get_transaction_count(own_address).await?;
 
-        let payload = encode_call(sig, tokens)?;
-
         let gas = self.simulated_gas_price_and_limit(our_balance).await?;
         let transaction = TransactionRequest {
             from: Some(own_address),
             to: contract_address,
-            nonce: Some(UnpaddedHex(nonce)),
             gas: Some(gas.limit.into()),
-            gas_price: Some(UnpaddedHex(gas.price)),
-            value: Some(UnpaddedHex(0u64.into())),
-            data: Some(Data(payload)),
+            nonce: Some(nonce.clone().into()),
+            gas_price: Some(gas.price.into()),
+            value: Some(value.clone().into()),
+            data: Some(data.clone().into()),
         };
 
         match height {

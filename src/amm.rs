@@ -93,14 +93,12 @@ impl Web3 {
         ];
 
         debug!("tokens is  {:?}", tokens);
+        let payload = encode_call(
+            "quoteExactInputSingle(address,address,uint24,uint256,uint160)",
+            &tokens,
+        )?;
         let result = self
-            .contract_call(
-                quoter,
-                "quoteExactInputSingle(address,address,uint24,uint256,uint160)",
-                &tokens,
-                caller_address,
-                None,
-            )
+            .simulate_transaction(quoter, 0u8.into(), payload, caller_address, None)
             .await?;
         debug!("result is {:?}", result);
         Ok(Uint256::from_bytes_be(match result.get(0..32) {
