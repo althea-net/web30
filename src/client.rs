@@ -343,6 +343,7 @@ impl Web3 {
     ) -> Result<Uint256, Web3Error> {
         let mut gas_price = None;
         let mut gas_price_multiplier = 1f32;
+        let mut gas_limit_multiplier = 1f32;
         let mut gas_limit = None;
         let mut network_id = None;
         let our_balance = self.eth_get_balance(own_address).await?;
@@ -352,6 +353,7 @@ impl Web3 {
             match option {
                 SendTxOption::GasPrice(gp) => gas_price = Some(gp),
                 SendTxOption::GasPriceMultiplier(gpm) => gas_price_multiplier = gpm,
+                SendTxOption::GasLimitMultiplier(glm) => gas_limit_multiplier = glm,
                 SendTxOption::GasLimit(gl) => gas_limit = Some(gl),
                 SendTxOption::NetworkId(ni) => network_id = Some(ni),
                 SendTxOption::Nonce(n) => nonce = n,
@@ -374,7 +376,7 @@ impl Web3 {
             }
         };
 
-        let gas_limit = if let Some(gl) = gas_limit {
+        let mut gas_limit = if let Some(gl) = gas_limit {
             gl
         } else {
             let gas = self
@@ -391,6 +393,14 @@ impl Web3 {
             })
             .await?
         };
+
+        // multiply limit by gasLimitMultiplier
+        let gas_limit_128 = gas_limit.to_u128();
+        if let Some(v) = gas_limit_128 {
+            gas_limit = ((v as f32 * gas_limit_multiplier) as u128).into()
+        } else {
+            gas_limit *= (gas_limit_multiplier.round() as u128).into()
+        }
 
         let network_id = if let Some(ni) = network_id {
             ni

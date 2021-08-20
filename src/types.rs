@@ -399,6 +399,7 @@ pub struct ConciseXdaiBlock {
 pub enum SendTxOption {
     GasPrice(Uint256),
     GasPriceMultiplier(f32),
+    GasLimitMultiplier(f32),
     GasLimit(Uint256),
     NetworkId(u64),
     Nonce(Uint256),

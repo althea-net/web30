@@ -7,6 +7,10 @@ use clarity::{
 };
 use num::BigUint;
 
+/// Default padding multiplied to uniswap exchange gas limit values due to variablity of gas limit values
+/// between iterations
+pub const DEFAULT_GAS_LIMIT_MULT: f32 = 1.2;
+
 lazy_static! {
     /// Uniswap V3's Quoter interface for checking current swap prices, from prod Ethereum
     pub static ref UNISWAP_QUOTER_ADDRESS: Address =
@@ -210,7 +214,15 @@ impl Web3 {
             &tokens,
         )
         .unwrap();
-        let options = options.unwrap_or_default();
+
+        // default gas limit multiplier
+        let mut options = options.unwrap_or_default();
+        let glm = DEFAULT_GAS_LIMIT_MULT;
+        let set_glm = options_contains_glm(&options);
+
+        if !set_glm {
+            options.push(SendTxOption::GasLimitMultiplier(glm));
+        }
 
         let _token_in_approval = self
             .approve_erc20_transfers(token_in, eth_private_key, router, None, vec![])
@@ -335,7 +347,15 @@ impl Web3 {
             &tokens,
         )
         .unwrap();
-        let options = options.unwrap_or_default();
+
+        // default gas limit multiplier
+        let mut options = options.unwrap_or_default();
+        let glm = DEFAULT_GAS_LIMIT_MULT;
+        let set_glm = options_contains_glm(&options);
+
+        if !set_glm {
+            options.push(SendTxOption::GasLimitMultiplier(glm));
+        }
 
         debug!("payload is  {:?}", payload);
         let result = self
@@ -352,6 +372,19 @@ impl Web3 {
         Ok(result)
     }
 }
+
+/// Helper function that tells us wheter the options parameter has a GasLimitMultiplier set or not
+fn options_contains_glm(options: &[SendTxOption]) -> bool {
+    for option in options {
+        match option {
+            SendTxOption::GasLimitMultiplier(_) => return true,
+            _ => continue,
+        }
+    }
+
+    false
+}
+
 // Checks that the input fee value is within the limits of uint24
 fn bad_fee(fee: &Uint256) -> bool {
     *fee > *TT24M1
