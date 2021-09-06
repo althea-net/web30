@@ -6,6 +6,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use std::num::ParseIntError;
+use std::time::Duration;
 use tokio::time::error::Elapsed;
 
 #[derive(Debug)]
@@ -28,6 +29,9 @@ pub enum Web3Error {
     ClarityError(ClarityError),
     ContractCallError(String),
     TransactionTimeout,
+    NoBlockProduced {
+        time: Duration,
+    },
 }
 
 impl From<ParseIntError> for Web3Error {
@@ -57,6 +61,13 @@ impl Display for Web3Error {
             Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
             Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
             Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
+            Web3Error::NoBlockProduced { time } => {
+                write!(
+                    f,
+                    "No Ethereum block was produced for {} seconds",
+                    time.as_secs()
+                )
+            }
             Web3Error::InsufficientGas {
                 balance,
                 base_gas,

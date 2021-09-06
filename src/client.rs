@@ -616,6 +616,25 @@ impl Web3 {
             (Err(e), Err(_)) => Err(e),
         }
     }
+
+    /// Waits for the next Ethereum block to be produced
+    pub async fn wait_for_next_block(&self, timeout: Duration) -> Result<(), Web3Error> {
+        let start = Instant::now();
+        let mut last_height: Option<Uint256> = None;
+        while Instant::now() - start < timeout {
+            match (self.eth_block_number().await, last_height.clone()) {
+                (Ok(n), None) => last_height = Some(n),
+                (Ok(block_height), Some(last_height)) => {
+                    if block_height > last_height {
+                        return Ok(());
+                    }
+                }
+                // errors should not exit early
+                (Err(_), _) => {}
+            }
+        }
+        Err(Web3Error::NoBlockProduced { time: timeout })
+    }
 }
 struct SimulatedGas {
     limit: Uint256,
