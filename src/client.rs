@@ -188,7 +188,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), true),
                 self.timeout,
-                Some(5_000_000),
+                Some(10_000_000),
             )
             .await
     }
@@ -202,7 +202,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 (format!("{:#x}", block_number), true),
                 self.timeout,
-                Some(5_000_000),
+                Some(10_000_000),
             )
             .await
     }
@@ -263,7 +263,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 ("latest", true),
                 self.timeout,
-                Some(5_000_000),
+                Some(10_000_000),
             )
             .await
     }
@@ -274,7 +274,7 @@ impl Web3 {
                 "eth_getBlockByNumber",
                 ("latest", true),
                 self.timeout,
-                Some(5_000_000),
+                Some(10_000_000),
             )
             .await
     }
