@@ -571,7 +571,8 @@ impl Web3 {
         const GAS_LIMIT: u128 = 12450000;
         let base_fee_per_gas = self.get_base_fee_per_gas().await?;
         let price = match base_fee_per_gas {
-            // post London
+            // post London, multiply by two to prevent changing gas prices
+            // from causing failure
             Some(base_gas) => base_gas,
             // pre London
             None => 1u8.into(),
