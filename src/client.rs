@@ -21,14 +21,14 @@ use tokio::time::sleep as delay_for;
 #[derive(Clone)]
 pub struct Web3 {
     url: String,
-    jsonrpc_client: Arc<Box<HttpClient>>,
+    jsonrpc_client: Arc<HttpClient>,
     timeout: Duration,
 }
 
 impl Web3 {
     pub fn new(url: &str, timeout: Duration) -> Self {
         Self {
-            jsonrpc_client: Arc::new(Box::new(HttpClient::new(url))),
+            jsonrpc_client: Arc::new(HttpClient::new(url)),
             timeout,
             url: url.to_string(),
         }
