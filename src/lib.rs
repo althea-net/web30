@@ -14,6 +14,7 @@ mod erc20_utils;
 pub mod eth_wrapping;
 mod event_utils;
 pub mod jsonrpc;
+mod mem;
 pub mod types;
 
 pub use event_utils::address_to_event;

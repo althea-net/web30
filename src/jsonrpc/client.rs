@@ -1,6 +1,7 @@
 use crate::jsonrpc::error::Web3Error;
 use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
+use crate::mem::get_buffer_size;
 use awc::http::header;
 use awc::Client;
 use serde::{Deserialize, Serialize};
@@ -37,17 +38,12 @@ impl HttpClient {
         method: &str,
         params: T,
         timeout: Duration,
-        request_size_limit: Option<usize>,
     ) -> Result<R, Web3Error>
     where
         for<'de> R: Deserialize<'de>,
         // T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
-        // the payload size limit for this request, almost everything
-        // will set this to None, and get the default 64k, but some requests
-        // need bigger buffers (like full block requests)
-        let limit = request_size_limit.unwrap_or(65536);
         let payload = Request::new(self.next_id(), method, params);
         let res = self
             .client
@@ -60,13 +56,23 @@ impl HttpClient {
             Ok(val) => val,
             Err(e) => return Err(Web3Error::FailedToSend(e)),
         };
-        let res: Response<R> = match res.json().limit(limit).await {
+
+        trace!("response headers {:?}", res.headers());
+
+        let request_size_limit = get_buffer_size();
+        trace!("using buffer size of {}", request_size_limit);
+        let decoded: Response<R> = match res.json().limit(request_size_limit).await {
             Ok(val) => val,
-            Err(e) => return Err(Web3Error::BadResponse(format!("Web3 Error {}", e))),
+            Err(e) => {
+                return Err(Web3Error::BadResponse(format!(
+                    "Size Limit {} Web3 Error {}",
+                    request_size_limit, e
+                )))
+            }
         };
         //Response<R>
-        trace!("got web3 response {:#?}", res);
-        let data = res.data.into_result();
+        trace!("got web3 response {:#?}", decoded);
+        let data = decoded.data.into_result();
         match data {
             Ok(r) => Ok(r),
             Err(e) => Err(Web3Error::JsonRpcError {
