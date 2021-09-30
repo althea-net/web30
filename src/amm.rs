@@ -224,10 +224,23 @@ impl Web3 {
             options.push(SendTxOption::GasLimitMultiplier(glm));
         }
 
-        let _token_in_approval = self
-            .approve_erc20_transfers(token_in, eth_private_key, router, None, vec![])
-            .await
-            .unwrap();
+        let approved = self
+            .check_erc20_approved(token_in, eth_address, router)
+            .await?;
+        if !approved {
+            let nonce = self.eth_get_transaction_count(eth_address).await?;
+            let _token_in_approval = self
+                .approve_erc20_transfers(
+                    token_in,
+                    eth_private_key,
+                    router,
+                    None,
+                    vec![SendTxOption::Nonce(nonce.clone())],
+                )
+                .await
+                .unwrap();
+            options.push(SendTxOption::Nonce(nonce + 1u8.into()));
+        }
         debug!("token_in approved");
 
         debug!("payload is  {:?}", payload);
