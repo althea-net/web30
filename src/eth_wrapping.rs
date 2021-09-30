@@ -1,9 +1,10 @@
+use crate::amm::WETH_CONTRACT_ADDRESS;
+use crate::{client::Web3, jsonrpc::error::Web3Error};
 use clarity::abi::Token;
 use clarity::Address;
 use clarity::{abi::encode_call, PrivateKey, Uint256};
-
-use crate::amm::WETH_CONTRACT_ADDRESS;
-use crate::{client::Web3, jsonrpc::error::Web3Error};
+use std::time::Duration;
+use tokio::time::timeout as future_timeout;
 
 // Performs wrapping and unwrapping of eth, along with balance checking
 impl Web3 {
@@ -12,14 +13,25 @@ impl Web3 {
         amount: Uint256,
         secret: PrivateKey,
         weth_address: Option<Address>,
+        wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
         let own_address = secret.to_public_key().unwrap();
         let sig = "deposit()";
         let tokens = [];
         let payload = encode_call(sig, &tokens).unwrap();
         let weth_address = weth_address.unwrap_or(*WETH_CONTRACT_ADDRESS);
-        self.send_transaction(weth_address, payload, amount, own_address, secret, vec![])
-            .await
+        let txid = self
+            .send_transaction(weth_address, payload, amount, own_address, secret, vec![])
+            .await?;
+
+        if let Some(timeout) = wait_timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(txid.clone(), timeout, None),
+            )
+            .await??;
+        }
+        Ok(txid)
     }
 
     pub async fn unwrap_eth(
@@ -27,20 +39,31 @@ impl Web3 {
         amount: Uint256,
         secret: PrivateKey,
         weth_address: Option<Address>,
+        wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
         let own_address = secret.to_public_key().unwrap();
         let sig = "withdraw(uint256)";
         let tokens = [Token::Uint(amount)];
         let payload = encode_call(sig, &tokens).unwrap();
         let weth_address = weth_address.unwrap_or(*WETH_CONTRACT_ADDRESS);
-        self.send_transaction(
-            weth_address,
-            payload,
-            0u16.into(),
-            own_address,
-            secret,
-            vec![],
-        )
-        .await
+        let txid = self
+            .send_transaction(
+                weth_address,
+                payload,
+                0u16.into(),
+                own_address,
+                secret,
+                vec![],
+            )
+            .await?;
+
+        if let Some(timeout) = wait_timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(txid.clone(), timeout, None),
+            )
+            .await??;
+        }
+        Ok(txid)
     }
 }
