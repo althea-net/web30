@@ -1,11 +1,15 @@
+use std::time::Duration;
+
 // Performs interactions with AMMs (Automated Market Makers) on ethereum
 use crate::{client::Web3, jsonrpc::error::Web3Error, types::SendTxOption};
+use clarity::utils::display_uint256_as_address;
 use clarity::{
     abi::{encode_call, Token},
     constants::{TT160M1, TT24M1},
     Address, PrivateKey, Uint256,
 };
 use num::BigUint;
+use tokio::time::timeout as future_timeout;
 
 /// Default padding multiplied to uniswap exchange gas limit values due to variablity of gas limit values
 /// between iterations
@@ -130,6 +134,7 @@ impl Web3 {
     /// * `sqrt_price_limit_x96_64` - Optional square root price limit, ignored if None
     /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
     /// * `options` - Optional arguments for the Transaction, see send_transaction()
+    /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
     ///
     /// # Examples
     /// ```
@@ -149,6 +154,7 @@ impl Web3 {
     ///     Some(uniswap_sqrt_price(1u8.into(), 2023u16.into())), // Sample 1 Eth ->  2k Dai swap rate
     ///     Some(*UNISWAP_ROUTER_ADDRESS),
     ///     None,
+    ///     None,
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
@@ -164,6 +170,7 @@ impl Web3 {
         sqrt_price_limit_x96_uint160: Option<Uint256>, // Actually a uint160 on the callee side
         uniswap_router: Option<Address>, // The default router will be used if None is provided
         options: Option<Vec<SendTxOption>>, // Options for send_transaction
+        wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
         let fee_uint24 = fee_uint24.unwrap_or_else(|| 3000u16.into());
         if bad_fee(&fee_uint24) {
@@ -228,15 +235,26 @@ impl Web3 {
             .check_erc20_approved(token_in, eth_address, router)
             .await?;
         if !approved {
+            debug!("token_in being approved");
+            // the nonce we will be using, if there's no timeout we must hack the nonce
+            // of the following swap to queue properly
+            let nonce = self.eth_get_transaction_count(eth_address).await?;
             let _token_in_approval = self
-                .approve_erc20_transfers(token_in, eth_private_key, router, None, options)
-                .await
-                .unwrap();
+                .approve_erc20_transfers(
+                    token_in,
+                    eth_private_key,
+                    router,
+                    wait_timeout,
+                    options.clone(),
+                )
+                .await?;
+            if wait_timeout.is_none() {
+                options.push(SendTxOption::Nonce(nonce + 1u8.into()));
+            }
         }
-        debug!("token_in approved");
 
         debug!("payload is  {:?}", payload);
-        let result = self
+        let txid = self
             .send_transaction(
                 router,
                 payload,
@@ -246,8 +264,19 @@ impl Web3 {
                 options,
             )
             .await?;
-        debug!("result is {:?}", result);
-        Ok(result)
+        debug!(
+            "txid for uniswap swap is {}",
+            display_uint256_as_address(txid.clone())
+        );
+        if let Some(timeout) = wait_timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(txid.clone(), timeout, None),
+            )
+            .await??;
+        }
+
+        Ok(txid)
     }
 
     /// Performs an exact input single pool swap via Uniswap v3, exchanging `amount` of eth directly for `token_out`
@@ -269,6 +298,7 @@ impl Web3 {
     /// * `sqrt_price_limit_x96_64` - Optional square root price limit, ignored if None
     /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
     /// * `options` - Optional arguments for the Transaction, see send_transaction()
+    /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
     ///
     /// # Examples
     /// ```
@@ -287,6 +317,7 @@ impl Web3 {
     ///     Some(uniswap_sqrt_price(1u8.into(), 2023u16.into())), // Sample 1 Eth ->  2k Dai swap rate
     ///     Some(*UNISWAP_ROUTER_ADDRESS),
     ///     None,
+    ///     None,
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
@@ -301,6 +332,7 @@ impl Web3 {
         sqrt_price_limit_x96_uint160: Option<Uint256>, // actually a uint160 on the callee side
         uniswap_router: Option<Address>, // the default router will be used if none is provided
         options: Option<Vec<SendTxOption>>, // options for send_transaction
+        wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
         let token_in = *WETH_CONTRACT_ADDRESS; // Uniswap requires WETH to be one of the swap tokens for ETH swaps
         let fee_uint24 = fee_uint24.unwrap_or_else(|| 3000u16.into());
@@ -363,7 +395,7 @@ impl Web3 {
         }
 
         debug!("payload is  {:?}", payload);
-        let result = self
+        let txid = self
             .send_transaction(
                 router,
                 payload,
@@ -373,8 +405,18 @@ impl Web3 {
                 options,
             )
             .await?;
-        debug!("result is {:?}", result);
-        Ok(result)
+        debug!(
+            "txid for uniswap swap is {}",
+            display_uint256_as_address(txid.clone())
+        );
+        if let Some(timeout) = wait_timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(txid.clone(), timeout, None),
+            )
+            .await??;
+        }
+        Ok(txid)
     }
 }
 
@@ -501,7 +543,9 @@ fn swap_hardhat_test() {
         let block = web3.eth_get_latest_block().await.unwrap();
         let deadline = block.timestamp + (10u32 * 60u32 * 100000u32).into();
 
-        let success = web3.wrap_eth(amount.clone(), miner_private_key, None).await;
+        let success = web3
+            .wrap_eth(amount.clone(), miner_private_key, None, None)
+            .await;
         if let Ok(b) = success {
             info!("Wrapped eth: {}", b);
         } else {
@@ -531,6 +575,7 @@ fn swap_hardhat_test() {
                 Some(deadline.clone()),
                 Some(amount_out_min.clone()),
                 Some(sqrt_price_limit_x96_uint160.clone()),
+                None,
                 None,
                 None,
             )
@@ -563,6 +608,7 @@ fn swap_hardhat_test() {
                 Some(deadline.clone()),
                 Some(amount_out_min.clone()),
                 Some(sqrt_price_limit_x96_uint160.clone()),
+                None,
                 None,
                 None,
             )
@@ -645,6 +691,7 @@ fn swap_hardhat_eth_in_test() {
                 Some(deadline.clone()),
                 Some(amount_out_min.clone()),
                 Some(sqrt_price_limit_x96_uint160.clone()),
+                None,
                 None,
                 None,
             )
