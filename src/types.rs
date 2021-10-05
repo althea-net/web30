@@ -159,7 +159,7 @@ pub struct NewFilter {
     pub topics: Option<Vec<Option<Vec<Option<String>>>>>,
 }
 
-#[derive(Serialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Clone, Eq, PartialEq, Debug)]
 pub struct TransactionRequest {
     //The address the transaction is send from.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -325,7 +325,7 @@ pub struct ConciseBlock {
     pub logs_bloom: Data,
     pub miner: Address,
     #[serde(rename = "mixHash")]
-    pub mix_hash: Uint256,
+    pub mix_hash: Option<Uint256>,
     pub nonce: Uint256,
     pub number: Uint256,
     #[serde(rename = "parentHash")]

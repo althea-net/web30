@@ -41,7 +41,7 @@ impl HttpClient {
     ) -> Result<R, Web3Error>
     where
         for<'de> R: Deserialize<'de>,
-        // T: std::fmt::Debug,
+        T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);
@@ -61,7 +61,45 @@ impl HttpClient {
 
         let request_size_limit = get_buffer_size();
         trace!("using buffer size of {}", request_size_limit);
-        let decoded: Response<R> = match res.json().limit(request_size_limit).await {
+
+        // Manual debugging
+        // The `Response` struct has a `ResponseData` enum flattened into it in order to match the
+        // error or result fields that the json can have. Unfortunately, this breaks serde's error
+        // reporting, so this code uses a dummy struct to better analyze deserialization errors.
+        /*
+        // note: needs actix-http in Cargo.toml
+        dbg!(&res);
+        use actix_http::HttpMessage;
+        let mut stream = res.take_payload();
+        use futures::prelude::stream::StreamExt;
+        println!("raw response:");
+        let mut s = String::new();
+        while let Some(x) = stream.next().await {
+            s += &String::from_utf8(x.unwrap().into_iter().collect()).unwrap();
+        }
+        for c in s.chars() {
+            print!("{}", c);
+            if c == ',' {
+                println!();
+            }
+        }
+        println!();
+        #[derive(Serialize, Deserialize, Debug, Clone)]
+        pub struct DummyResponse<R> {
+            pub id: serde_json::Value,
+            pub jsonrpc: String,
+            pub result: R,
+        }
+        let _tmp: Result<DummyResponse<R>, _> = serde_json::from_str(&s);
+        dbg!(&_tmp);
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
+        // use this response instead when uncommented
+        let response: Result<Response<R>, _> = serde_json::from_str(&s);
+        */
+
+        let response: Result<Response<R>, _> = res.json::<Response<R>>().limit(request_size_limit).await;
+        let decoded: Response<R> = match response {
             Ok(val) => val,
             Err(e) => {
                 return Err(Web3Error::BadResponse(format!(

@@ -22,4 +22,3 @@ num = "0.4"
 [dev-dependencies]
 actix = "0.12"
 env_logger = "0.9"
-
