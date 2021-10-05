@@ -3,6 +3,7 @@ name = "web30"
 version = "0.17.1"
 authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick"]
 description = "Async endian safe web3 library"
+repository = "https://github.com/althea-net/web30"
 license = "Apache-2.0"
 edition = "2018"
 
