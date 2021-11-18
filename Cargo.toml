@@ -4,7 +4,7 @@ version = "0.17.2"
 authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick"]
 description = "Async endian safe web3 library"
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 serde = "1.0"
