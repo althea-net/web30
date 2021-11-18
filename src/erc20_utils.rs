@@ -179,7 +179,13 @@ impl Web3 {
             .await?;
 
         match String::from_utf8(name) {
-            Ok(val) => Ok(val),
+            Ok(mut val) => {
+                // the value returned is actually in Ethereum ABI encoded format
+                // stripping control characters is an easy way to strip off the encoding
+                val.retain(|v| !v.is_control());
+                let val = val.trim().to_string();
+                Ok(val)
+            }
             Err(_e) => Err(Web3Error::ContractCallError(
                 "name is not valid utf8".to_string(),
             )),
@@ -197,7 +203,13 @@ impl Web3 {
             .await?;
 
         match String::from_utf8(symbol) {
-            Ok(val) => Ok(val),
+            Ok(mut val) => {
+                // the value returned is actually in Ethereum ABI encoded format
+                // stripping control characters is an easy way to strip off the encoding
+                val.retain(|v| !v.is_control());
+                let val = val.trim().to_string();
+                Ok(val)
+            }
             Err(_e) => Err(Web3Error::ContractCallError(
                 "name is not valid utf8".to_string(),
             )),
@@ -223,4 +235,65 @@ impl Web3 {
             }
         }))
     }
+
+    pub async fn get_erc20_supply(
+        &self,
+        erc20: Address,
+        caller_address: Address,
+    ) -> Result<Uint256, Web3Error> {
+        let payload = encode_call("totalSupply()", &[])?;
+        let decimals = self
+            .simulate_transaction(erc20, 0u8.into(), payload, caller_address, None)
+            .await?;
+
+        Ok(Uint256::from_bytes_be(match decimals.get(0..32) {
+            Some(val) => val,
+            None => {
+                return Err(Web3Error::ContractCallError(
+                    "Bad response from ERC20 Total Supply".to_string(),
+                ))
+            }
+        }))
+    }
+}
+
+#[test]
+fn test_erc20_metadata() {
+    use actix::System;
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let dai_address = "0x6b175474e89094c44da98b954eedeac495271d0f"
+        .parse()
+        .unwrap();
+    // random coinbase address hoping it always has eth to 'pay' for this call
+    let caller_address = "0x503828976D22510aad0201ac7EC88293211D23Da"
+        .parse()
+        .unwrap();
+    runner.block_on(async move {
+        assert_eq!(
+            web3.get_erc20_decimals(dai_address, caller_address)
+                .await
+                .unwrap(),
+            18u8.into()
+        );
+        let num: Uint256 = 1000u32.into();
+        assert!(
+            web3.get_erc20_supply(dai_address, caller_address)
+                .await
+                .unwrap()
+                > num
+        );
+        assert_eq!(
+            web3.get_erc20_symbol(dai_address, caller_address)
+                .await
+                .unwrap(),
+            "DAI"
+        );
+        assert_eq!(
+            web3.get_erc20_name(dai_address, caller_address)
+                .await
+                .unwrap(),
+            "Dai Stablecoin"
+        );
+    })
 }
