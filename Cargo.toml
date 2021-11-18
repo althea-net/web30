@@ -5,6 +5,7 @@ authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick"]
 description = "Async endian safe web3 library"
 license = "Apache-2.0"
 edition = "2021"
+repository = "https://github.com/althea-net/web30"
 
 [dependencies]
 serde = "1.0"
