@@ -187,7 +187,7 @@ impl Web3 {
             ));
         }
 
-        let eth_address = eth_private_key.to_public_key().unwrap();
+        let eth_address = eth_private_key.to_address();
         let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
@@ -350,7 +350,7 @@ impl Web3 {
             ));
         }
 
-        let eth_address = eth_private_key.to_public_key().unwrap();
+        let eth_address = eth_private_key.to_address();
         let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
@@ -524,7 +524,7 @@ fn swap_hardhat_test() {
         "0xb1bab011e03a9862664706fc3bbaa1b16651528e5f0e7fbfcbfdd8be302a13e7"
             .parse()
             .unwrap();
-    let miner_address: Address = miner_private_key.to_public_key().unwrap();
+    let miner_address: Address = miner_private_key.to_address();
 
     use crate::client::Web3;
     use actix::System;
@@ -649,7 +649,7 @@ fn swap_hardhat_eth_in_test() {
         "0xb1bab011e03a9862664706fc3bbaa1b16651528e5f0e7fbfcbfdd8be302a13e7"
             .parse()
             .unwrap();
-    let miner_address: Address = miner_private_key.to_public_key().unwrap();
+    let miner_address: Address = miner_private_key.to_address();
 
     use crate::client::Web3;
     use actix::System;
