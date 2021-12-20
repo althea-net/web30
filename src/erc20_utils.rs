@@ -257,10 +257,8 @@ impl Web3 {
     }
 }
 
-#[test]
-fn test_erc20_metadata() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_erc20_metadata() {
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     let dai_address = "0x6b175474e89094c44da98b954eedeac495271d0f"
         .parse()
@@ -269,31 +267,30 @@ fn test_erc20_metadata() {
     let caller_address = "0x503828976D22510aad0201ac7EC88293211D23Da"
         .parse()
         .unwrap();
-    runner.block_on(async move {
-        assert_eq!(
-            web3.get_erc20_decimals(dai_address, caller_address)
-                .await
-                .unwrap(),
-            18u8.into()
-        );
-        let num: Uint256 = 1000u32.into();
-        assert!(
-            web3.get_erc20_supply(dai_address, caller_address)
-                .await
-                .unwrap()
-                > num
-        );
-        assert_eq!(
-            web3.get_erc20_symbol(dai_address, caller_address)
-                .await
-                .unwrap(),
-            "DAI"
-        );
-        assert_eq!(
-            web3.get_erc20_name(dai_address, caller_address)
-                .await
-                .unwrap(),
-            "Dai Stablecoin"
-        );
-    })
+
+    assert_eq!(
+        web3.get_erc20_decimals(dai_address, caller_address)
+            .await
+            .unwrap(),
+        18u8.into()
+    );
+    let num: Uint256 = 1000u32.into();
+    assert!(
+        web3.get_erc20_supply(dai_address, caller_address)
+            .await
+            .unwrap()
+            > num
+    );
+    assert_eq!(
+        web3.get_erc20_symbol(dai_address, caller_address)
+            .await
+            .unwrap(),
+        "DAI"
+    );
+    assert_eq!(
+        web3.get_erc20_name(dai_address, caller_address)
+            .await
+            .unwrap(),
+        "Dai Stablecoin"
+    );
 }

@@ -606,88 +606,71 @@ struct SimulatedGas {
     price: Uint256,
 }
 
-#[test]
-fn test_chain_id() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_chain_id() {
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(5));
-    runner.block_on(async move {
-        assert_eq!(Some(Uint256::from(1u8)), web3.eth_chainid().await.unwrap());
-        assert_eq!(
-            Some(Uint256::from(100u8)),
-            web3_xdai.eth_chainid().await.unwrap()
-        );
-    })
+
+    assert_eq!(Some(Uint256::from(1u8)), web3.eth_chainid().await.unwrap());
+    assert_eq!(
+        Some(Uint256::from(100u8)),
+        web3_xdai.eth_chainid().await.unwrap()
+    );
 }
 
-#[test]
-fn test_net_version() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_net_version() {
     let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(5));
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-    runner.block_on(async move {
-        assert_eq!(1u64, web3.net_version().await.unwrap());
-        assert_eq!(100u64, web3_xdai.net_version().await.unwrap());
-    })
+
+    assert_eq!(1u64, web3.net_version().await.unwrap());
+    assert_eq!(100u64, web3_xdai.net_version().await.unwrap());
 }
 #[ignore]
-#[test]
-fn test_complex_response() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_complex_response() {
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     let txid1 = "0x8b9ef028f99016cd3cb8d4168df7491a0bf44f08b678d37f63ab61e782c500ab"
         .parse()
         .unwrap();
-    runner.block_on(async move {
-        let val = web3.eth_get_transaction_by_hash(txid1).await;
-        let val = val.expect("Actix failure");
-        let response = val.expect("Failed to parse transaction response");
-        assert!(response.block_number.unwrap() > 10u32.into());
-    })
+
+    let val = web3.eth_get_transaction_by_hash(txid1).await;
+    let val = val.expect("tokio failure");
+    let response = val.expect("Failed to parse transaction response");
+    assert!(response.block_number.unwrap() > 10u32.into());
 }
 
-#[test]
-fn test_transaction_count_response() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_transaction_count_response() {
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     let address: Address = "0x04668ec2f57cc15c381b461b9fedab5d451c8f7f"
         .parse()
         .unwrap();
-    runner.block_on(async move {
-        let val = web3.eth_get_transaction_count(address).await;
-        let val = val.unwrap();
-        assert!(val > 0u32.into());
-    });
+
+    let val = web3.eth_get_transaction_count(address).await;
+    let val = val.unwrap();
+    assert!(val > 0u32.into());
 }
 
-#[test]
-fn test_block_response() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_block_response() {
     let web3 = Web3::new("https://eth.altheamesh.com", Duration::from_secs(5));
-    runner.block_on(async move {
-        let val = web3.eth_get_latest_block().await;
-        let val = val.expect("Actix failure");
-        assert!(val.number > 10u32.into());
 
-        let val = web3.eth_get_latest_block_full().await;
-        let val = val.expect("Actix failure");
-        assert!(val.number > 10u32.into());
-    });
+    let val = web3.eth_get_latest_block().await;
+    eprintln!("{:?}", val);
+    let val = val.expect("tokio failure");
+    assert!(val.number > 10u32.into());
+
+    let val = web3.eth_get_latest_block_full().await;
+    let val = val.expect("tokio failure");
+    assert!(val.number > 10u32.into());
 }
 
-#[test]
-fn test_dai_block_response() {
-    use actix::System;
-    let runner = System::new();
+#[tokio::test]
+async fn test_dai_block_response() {
     let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(5));
-    runner.block_on(async move {
-        let val = web3.xdai_get_latest_block().await;
-        let val = val.expect("Actix failure");
-        assert!(val.number > 10u32.into());
-    });
+
+    let val = web3.xdai_get_latest_block().await;
+    let val = val.expect("tokio failure");
+    assert!(val.number > 10u32.into());
 }
