@@ -1,11 +1,11 @@
 [package]
-authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick"]
+authors = ["Michal Papierski", "Jehan Tremback", "Justin Kilpatrick", "Elvis Dedic"]
 description = "Async endian safe web3 library"
 edition = "2021"
 license = "Apache-2.0"
 name = "web30"
-repository = "https://github.com/althea-net/web30"
-version = "0.17.4"
+repository = "https://github.com/leviathanbeak/web30"
+version = "0.18.0"
 
 [dependencies]
 clarity = "0.5"
