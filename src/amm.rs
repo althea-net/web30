@@ -187,7 +187,7 @@ impl Web3 {
             ));
         }
 
-        let eth_address = eth_private_key.to_public_key().unwrap();
+        let eth_address = eth_private_key.to_address();
         let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
@@ -350,7 +350,7 @@ impl Web3 {
             ));
         }
 
-        let eth_address = eth_private_key.to_public_key().unwrap();
+        let eth_address = eth_private_key.to_address();
         let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
@@ -461,13 +461,12 @@ pub fn uniswap_sqrt_price(amount_1: Uint256, amount_0: Uint256) -> Uint256 {
     Uint256(BigUint::sqrt(&ratio_x192))
 }
 #[ignore]
-#[test]
-fn get_uniswap_price_test() {
-    use actix::System;
+#[tokio::test]
+async fn get_uniswap_price_test() {
     use env_logger::{Builder, Env};
     use std::time::Duration;
     Builder::from_env(Env::default().default_filter_or("warn")).init(); // Change to debug for logs
-    let runner = System::new();
+
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     let caller_address =
         Address::parse_and_validate("0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c").unwrap();
@@ -475,48 +474,46 @@ fn get_uniswap_price_test() {
     let fee = Uint256::from(500u16);
     let sqrt_price_limit_x96_uint160 = Uint256::from(0u16);
 
-    runner.block_on(async move {
-        let price = web3
-            .get_uniswap_price(
-                caller_address,
-                *WETH_CONTRACT_ADDRESS,
-                *DAI_CONTRACT_ADDRESS,
-                Some(fee.clone()),
-                amount.clone(),
-                Some(sqrt_price_limit_x96_uint160.clone()),
-                None,
-            )
-            .await;
-        let weth2dai = price.unwrap();
-        debug!("weth->dai price is {}", weth2dai);
-        assert!(weth2dai > 0u32.into());
-        let price = web3
-            .get_uniswap_price(
-                caller_address,
-                *DAI_CONTRACT_ADDRESS,
-                *WETH_CONTRACT_ADDRESS,
-                Some(fee.clone()),
-                weth2dai,
-                Some(sqrt_price_limit_x96_uint160),
-                None,
-            )
-            .await;
-        let dai2weth = price.unwrap();
-        debug!("dai->weth price is {}", &dai2weth);
-        let amount_float: f64 = (amount.to_string()).parse().unwrap();
-        let dai2weth_float: f64 = (dai2weth.to_string()).parse().unwrap();
-        // If we were to swap, we should get within 5% back what we originally put in to account for slippage and fees
-        assert!((0.95 * amount_float) < dai2weth_float && dai2weth_float < (1.05 * amount_float));
-    });
+    let price = web3
+        .get_uniswap_price(
+            caller_address,
+            *WETH_CONTRACT_ADDRESS,
+            *DAI_CONTRACT_ADDRESS,
+            Some(fee.clone()),
+            amount.clone(),
+            Some(sqrt_price_limit_x96_uint160.clone()),
+            None,
+        )
+        .await;
+    let weth2dai = price.unwrap();
+    debug!("weth->dai price is {}", weth2dai);
+    assert!(weth2dai > 0u32.into());
+    let price = web3
+        .get_uniswap_price(
+            caller_address,
+            *DAI_CONTRACT_ADDRESS,
+            *WETH_CONTRACT_ADDRESS,
+            Some(fee.clone()),
+            weth2dai,
+            Some(sqrt_price_limit_x96_uint160),
+            None,
+        )
+        .await;
+    let dai2weth = price.unwrap();
+    debug!("dai->weth price is {}", &dai2weth);
+    let amount_float: f64 = (amount.to_string()).parse().unwrap();
+    let dai2weth_float: f64 = (dai2weth.to_string()).parse().unwrap();
+    // If we were to swap, we should get within 5% back what we originally put in to account for slippage and fees
+    assert!((0.95 * amount_float) < dai2weth_float && dai2weth_float < (1.05 * amount_float));
 }
 
-#[test]
+#[tokio::test]
 // Avoid accidentally spending funds or failing when not running hardhat
 #[ignore]
 // Note: If you specify a live eth node in Web3::new() and a real private key below, real funds will be used.
 // Run this test with the local hardhat environment running
 // Swaps WETH for DAI then back again
-fn swap_hardhat_test() {
+async fn swap_hardhat_test() {
     // this key is the private key for the public key defined in tests/assets/ETHGenesis.json
     // where the full node / miner sends its rewards. Therefore it's always going
     // to have a lot of ETH to pay for things like contract deployments
@@ -524,14 +521,13 @@ fn swap_hardhat_test() {
         "0xb1bab011e03a9862664706fc3bbaa1b16651528e5f0e7fbfcbfdd8be302a13e7"
             .parse()
             .unwrap();
-    let miner_address: Address = miner_private_key.to_public_key().unwrap();
+    let miner_address: Address = miner_private_key.to_address();
 
     use crate::client::Web3;
-    use actix::System;
+
     use env_logger::{Builder, Env};
     use std::time::Duration;
     Builder::from_env(Env::default().default_filter_or("warn")).init(); // Change to debug for logs
-    let runner = System::new();
 
     let web3 = Web3::new("http://localhost:8545", Duration::from_secs(300));
     let amount = Uint256::from(1000000000000000000u64); // 1 weth
@@ -539,109 +535,108 @@ fn swap_hardhat_test() {
     let fee = Uint256::from(500u16);
 
     let sqrt_price_limit_x96_uint160: Uint256 = 0u8.into();
-    runner.block_on(async move {
-        let block = web3.eth_get_latest_block().await.unwrap();
-        let deadline = block.timestamp + (10u32 * 60u32 * 100000u32).into();
 
-        let success = web3
-            .wrap_eth(amount.clone(), miner_private_key, None, None)
-            .await;
-        if let Ok(b) = success {
-            info!("Wrapped eth: {}", b);
-        } else {
-            panic!("Failed to wrap eth before testing uniswap");
-        }
-        let initial_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        let initial_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
+    let block = web3.eth_get_latest_block().await.unwrap();
+    let deadline = block.timestamp + (10u32 * 60u32 * 100000u32).into();
 
-        info!(
-            "Initial WETH: {}, Initial DAI: {}",
-            initial_weth, initial_dai
-        );
+    let success = web3
+        .wrap_eth(amount.clone(), miner_private_key, None, None)
+        .await;
+    if let Ok(b) = success {
+        info!("Wrapped eth: {}", b);
+    } else {
+        panic!("Failed to wrap eth before testing uniswap");
+    }
+    let initial_weth = web3
+        .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    let initial_dai = web3
+        .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
 
-        let result = web3
-            .swap_uniswap(
-                miner_private_key,
-                *WETH_CONTRACT_ADDRESS,
-                *DAI_CONTRACT_ADDRESS,
-                Some(fee.clone()),
-                amount.clone(),
-                Some(deadline.clone()),
-                Some(amount_out_min.clone()),
-                Some(sqrt_price_limit_x96_uint160.clone()),
-                None,
-                None,
-                None,
-            )
-            .await;
-        if result.is_err() {
-            panic!("Error performing first swap: {:?}", result.err());
-        }
-        let executing_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        let executing_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        info!(
-            "Executing WETH: {}, Executing DAI: {}",
-            executing_weth, executing_dai
-        );
+    info!(
+        "Initial WETH: {}, Initial DAI: {}",
+        initial_weth, initial_dai
+    );
 
-        let dai_gained = executing_dai.clone() - initial_dai.clone();
-        assert!(dai_gained > 0u8.into());
-        let result = web3
-            .swap_uniswap(
-                miner_private_key,
-                *DAI_CONTRACT_ADDRESS,
-                *WETH_CONTRACT_ADDRESS,
-                Some(fee.clone()),
-                dai_gained.clone(),
-                Some(deadline.clone()),
-                Some(amount_out_min.clone()),
-                Some(sqrt_price_limit_x96_uint160.clone()),
-                None,
-                None,
-                None,
-            )
-            .await;
-        if result.is_err() {
-            panic!("Error performing second swap: {:?}", result.err());
-        }
-        let final_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        let final_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        info!("Final WETH: {}, Final DAI: {}", final_weth, final_dai);
-        let final_dai_delta = final_dai - initial_dai;
-        assert!(final_dai_delta == 0u8.into()); // We should have gained little to no dai
+    let result = web3
+        .swap_uniswap(
+            miner_private_key,
+            *WETH_CONTRACT_ADDRESS,
+            *DAI_CONTRACT_ADDRESS,
+            Some(fee.clone()),
+            amount.clone(),
+            Some(deadline.clone()),
+            Some(amount_out_min.clone()),
+            Some(sqrt_price_limit_x96_uint160.clone()),
+            None,
+            None,
+            None,
+        )
+        .await;
+    if result.is_err() {
+        panic!("Error performing first swap: {:?}", result.err());
+    }
+    let executing_weth = web3
+        .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    let executing_dai = web3
+        .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    info!(
+        "Executing WETH: {}, Executing DAI: {}",
+        executing_weth, executing_dai
+    );
 
-        let weth_gained: f64 = (final_weth - executing_weth).to_string().parse().unwrap();
-        let original_amount: f64 = (amount).to_string().parse().unwrap();
-        // we should not have lost or gained much
-        assert!(0.95 * original_amount < weth_gained && weth_gained < 1.05 * original_amount);
-    });
+    let dai_gained = executing_dai.clone() - initial_dai.clone();
+    assert!(dai_gained > 0u8.into());
+    let result = web3
+        .swap_uniswap(
+            miner_private_key,
+            *DAI_CONTRACT_ADDRESS,
+            *WETH_CONTRACT_ADDRESS,
+            Some(fee.clone()),
+            dai_gained.clone(),
+            Some(deadline.clone()),
+            Some(amount_out_min.clone()),
+            Some(sqrt_price_limit_x96_uint160.clone()),
+            None,
+            None,
+            None,
+        )
+        .await;
+    if result.is_err() {
+        panic!("Error performing second swap: {:?}", result.err());
+    }
+    let final_weth = web3
+        .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    let final_dai = web3
+        .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    info!("Final WETH: {}, Final DAI: {}", final_weth, final_dai);
+    let final_dai_delta = final_dai - initial_dai;
+    assert!(final_dai_delta == 0u8.into()); // We should have gained little to no dai
+
+    let weth_gained: f64 = (final_weth - executing_weth).to_string().parse().unwrap();
+    let original_amount: f64 = (amount).to_string().parse().unwrap();
+    // we should not have lost or gained much
+    assert!(0.95 * original_amount < weth_gained && weth_gained < 1.05 * original_amount);
 }
 
-#[test]
+#[tokio::test]
 // Avoid accidentally spending funds or failing when not running hardhat
 #[ignore]
 // Note: If you specify a live eth node in Web3::new() and a real private key below, real funds will be used.
 // Run this test with the local hardhat environment running
 // Swaps WETH for DAI then back again
-fn swap_hardhat_eth_in_test() {
+async fn swap_hardhat_eth_in_test() {
     // this key is the private key for the public key defined in tests/assets/ETHGenesis.json
     // where the full node / miner sends its rewards. Therefore it's always going
     // to have a lot of ETH to pay for things like contract deployments
@@ -649,14 +644,12 @@ fn swap_hardhat_eth_in_test() {
         "0xb1bab011e03a9862664706fc3bbaa1b16651528e5f0e7fbfcbfdd8be302a13e7"
             .parse()
             .unwrap();
-    let miner_address: Address = miner_private_key.to_public_key().unwrap();
+    let miner_address: Address = miner_private_key.to_address();
 
     use crate::client::Web3;
-    use actix::System;
     use env_logger::{Builder, Env};
     use std::time::Duration;
     Builder::from_env(Env::default().default_filter_or("warn")).init(); // Change to debug for logs
-    let runner = System::new();
 
     let web3 = Web3::new("http://localhost:8545", Duration::from_secs(300));
     let amount = Uint256::from(1000000000000000000u64); // 1 weth
@@ -664,82 +657,81 @@ fn swap_hardhat_eth_in_test() {
     let fee = Uint256::from(500u16);
 
     let sqrt_price_limit_x96_uint160: Uint256 = 0u8.into();
-    runner.block_on(async move {
-        let block = web3.eth_get_latest_block().await.unwrap();
-        let deadline = block.timestamp + (10u32 * 60u32 * 100000u32).into();
 
-        let initial_eth = web3.eth_get_balance(miner_address).await.unwrap();
-        let initial_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        let initial_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
+    let block = web3.eth_get_latest_block().await.unwrap();
+    let deadline = block.timestamp + (10u32 * 60u32 * 100000u32).into();
 
-        info!(
-            "Initial ETH: {}, Initial WETH: {}, Initial DAI: {}",
-            initial_eth, initial_weth, initial_dai
-        );
-        let result = web3
-            .swap_uniswap_eth_in(
-                miner_private_key,
-                *DAI_CONTRACT_ADDRESS,
-                Some(fee.clone()),
-                amount.clone(),
-                Some(deadline.clone()),
-                Some(amount_out_min.clone()),
-                Some(sqrt_price_limit_x96_uint160.clone()),
-                None,
-                None,
-                None,
-            )
-            .await;
-        if result.is_err() {
-            panic!("Error performing first swap: {:?}", result.err());
-        }
-        let final_eth = web3.eth_get_balance(miner_address).await.unwrap();
-        let final_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        let final_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
-            .await
-            .unwrap();
-        info!(
-            "Final ETH: {}, Final WETH: {}, Final DAI: {}",
-            final_eth, final_weth, final_dai
-        );
+    let initial_eth = web3.eth_get_balance(miner_address).await.unwrap();
+    let initial_weth = web3
+        .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    let initial_dai = web3
+        .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
 
-        let dai_gained = final_dai - initial_dai;
-        // At the point the chain is frozen for the relay market test,
-        // we expect to receive expect to receive about 2,300 dai
-        let two_k_dai = 2000 * 1_000_000_000_000_000_000u128;
-        let one_eth = 1_000_000_000_000_000_000u128;
-        assert!(
-            dai_gained > two_k_dai.into(),
-            "dai_gained = {} <= 2000 * 10^18",
-            dai_gained
-        );
-        let eth_lost = initial_eth - final_eth;
-        assert!(
-            eth_lost > one_eth.into(),
-            "eth_lost = {} <= 1 * 10^18",
-            eth_lost
-        );
+    info!(
+        "Initial ETH: {}, Initial WETH: {}, Initial DAI: {}",
+        initial_eth, initial_weth, initial_dai
+    );
+    let result = web3
+        .swap_uniswap_eth_in(
+            miner_private_key,
+            *DAI_CONTRACT_ADDRESS,
+            Some(fee.clone()),
+            amount.clone(),
+            Some(deadline.clone()),
+            Some(amount_out_min.clone()),
+            Some(sqrt_price_limit_x96_uint160.clone()),
+            None,
+            None,
+            None,
+        )
+        .await;
+    if result.is_err() {
+        panic!("Error performing first swap: {:?}", result.err());
+    }
+    let final_eth = web3.eth_get_balance(miner_address).await.unwrap();
+    let final_weth = web3
+        .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    let final_dai = web3
+        .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+        .await
+        .unwrap();
+    info!(
+        "Final ETH: {}, Final WETH: {}, Final DAI: {}",
+        final_eth, final_weth, final_dai
+    );
 
-        assert!(
-            final_weth == initial_weth,
-            "Did not expect to modify wETH balance. Started with {} ended with {}",
-            initial_weth,
-            final_weth
-        );
+    let dai_gained = final_dai - initial_dai;
+    // At the point the chain is frozen for the relay market test,
+    // we expect to receive expect to receive about 2,300 dai
+    let two_k_dai = 2000 * 1_000_000_000_000_000_000u128;
+    let one_eth = 1_000_000_000_000_000_000u128;
+    assert!(
+        dai_gained > two_k_dai.into(),
+        "dai_gained = {} <= 2000 * 10^18",
+        dai_gained
+    );
+    let eth_lost = initial_eth - final_eth;
+    assert!(
+        eth_lost > one_eth.into(),
+        "eth_lost = {} <= 1 * 10^18",
+        eth_lost
+    );
 
-        info!(
-            "Effectively swapped {} eth for {} dai",
-            eth_lost, dai_gained
-        );
-    });
+    assert!(
+        final_weth == initial_weth,
+        "Did not expect to modify wETH balance. Started with {} ended with {}",
+        initial_weth,
+        final_weth
+    );
+
+    info!(
+        "Effectively swapped {} eth for {} dai",
+        eth_lost, dai_gained
+    );
 }

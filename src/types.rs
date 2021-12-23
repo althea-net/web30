@@ -232,7 +232,7 @@ pub struct Block {
     pub logs_bloom: Data,
     pub miner: Address,
     #[serde(rename = "mixHash")]
-    pub mix_hash: Uint256,
+    pub mix_hash: Option<Uint256>,
     pub nonce: Uint256,
     pub number: Uint256,
     #[serde(rename = "parentHash")]
@@ -325,7 +325,7 @@ pub struct ConciseBlock {
     pub logs_bloom: Data,
     pub miner: Address,
     #[serde(rename = "mixHash")]
-    pub mix_hash: Uint256,
+    pub mix_hash: Option<Uint256>,
     pub nonce: Uint256,
     pub number: Uint256,
     #[serde(rename = "parentHash")]
@@ -424,20 +424,19 @@ mod tests {
     use std::time::Duration;
 
     /// This test is used to get new blocks for testing easily
-    #[test]
+    #[tokio::test]
     #[ignore]
-    fn test_arbitrary_block() {
-        use actix::System;
+    async fn test_arbitrary_block() {
         env_logger::init();
-        let runner = System::new();
+
         let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-        runner.block_on(async move {
-            let res = web3.eth_get_block_by_number(10750715u32.into()).await;
-            if res.is_err() {
-                println!("{:?}", res);
-                System::current().stop_with_code(1);
-            }
-        });
+        let block_number: Uint256 = 10750715u32.into();
+        let res = web3
+            .eth_get_block_by_number(block_number.clone())
+            .await
+            .unwrap();
+
+        assert_eq!(block_number, res.number);
     }
 
     #[test]

@@ -2,8 +2,7 @@ use crate::jsonrpc::error::Web3Error;
 use crate::jsonrpc::request::Request;
 use crate::jsonrpc::response::Response;
 use crate::mem::get_buffer_size;
-use awc::http::header;
-use awc::Client;
+use reqwest::{header, Client, Method};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::str;
@@ -20,7 +19,7 @@ impl HttpClient {
     pub fn new(url: &str) -> Self {
         Self {
             id_counter: Arc::new(Mutex::new(RefCell::new(0u64))),
-            url: url.to_string(),
+            url: url.into(),
             client: Client::default(),
         }
     }
@@ -41,45 +40,39 @@ impl HttpClient {
     ) -> Result<R, Web3Error>
     where
         for<'de> R: Deserialize<'de>,
-        // T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
         let payload = Request::new(self.next_id(), method, params);
+
         let res = self
             .client
-            .post(&self.url)
-            .append_header((header::CONTENT_TYPE, "application/json"))
+            .request(Method::POST, &self.url)
+            .header(header::CONTENT_TYPE, "application/json")
             .timeout(timeout)
-            .send_json(&payload)
-            .await;
-        let mut res = match res {
-            Ok(val) => val,
-            Err(e) => return Err(Web3Error::FailedToSend(e)),
-        };
+            .json(&payload)
+            .send()
+            .await?;
 
         trace!("response headers {:?}", res.headers());
 
         let request_size_limit = get_buffer_size();
         trace!("using buffer size of {}", request_size_limit);
-        let decoded: Response<R> = match res.json().limit(request_size_limit).await {
-            Ok(val) => val,
-            Err(e) => {
-                return Err(Web3Error::BadResponse(format!(
-                    "Size Limit {} Web3 Error {}",
-                    request_size_limit, e
-                )))
-            }
+
+        let response_content_length = match res.content_length() {
+            Some(v) => v as usize,
+            None => request_size_limit + 1, // Just to protect ourselves from a malicious response
         };
-        //Response<R>
-        trace!("got web3 response {:#?}", decoded);
-        let data = decoded.data.into_result();
-        match data {
-            Ok(r) => Ok(r),
-            Err(e) => Err(Web3Error::JsonRpcError {
-                code: e.code,
-                message: e.message,
-                data: format!("{:?}", e.data),
-            }),
+
+        if response_content_length > request_size_limit {
+            return Err(Web3Error::BadResponse(format!(
+                "Size Limit {} Web3 Error",
+                request_size_limit
+            )));
         }
+
+        let data: Response<R> = res.json().await?;
+        trace!("got web3 response {:#?}", data);
+
+        Ok(data.result)
     }
 }

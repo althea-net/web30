@@ -15,7 +15,7 @@ impl Web3 {
         weth_address: Option<Address>,
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
-        let own_address = secret.to_public_key().unwrap();
+        let own_address = secret.to_address();
         let sig = "deposit()";
         let tokens = [];
         let payload = encode_call(sig, &tokens).unwrap();
@@ -41,7 +41,7 @@ impl Web3 {
         weth_address: Option<Address>,
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
-        let own_address = secret.to_public_key().unwrap();
+        let own_address = secret.to_address();
         let sig = "withdraw(uint256)";
         let tokens = [Token::Uint(amount)];
         let payload = encode_call(sig, &tokens).unwrap();
