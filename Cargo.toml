@@ -4,7 +4,7 @@ description = "Async endian safe web3 library"
 edition = "2021"
 license = "Apache-2.0"
 name = "web30"
-repository = "https://github.com/leviathanbeak/web30"
+repository = "https://github.com/onomyprotocol/web30.git"
 version = "0.18.0"
 
 [dependencies]
