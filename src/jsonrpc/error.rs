@@ -32,6 +32,7 @@ pub enum Web3Error {
     NoBlockProduced {
         time: Duration,
     },
+    SyncingNode(String),
 }
 
 impl From<ParseIntError> for Web3Error {
@@ -91,6 +92,9 @@ impl Display for Web3Error {
                 "Web3 Response error code {} message {} data {:?}",
                 code, message, data
             ),
+            Web3Error::SyncingNode(val) => {
+                write!(f, "Web3 Node is syncing {}", val)
+            }
         }
     }
 }
