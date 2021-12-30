@@ -416,6 +416,21 @@ where
     }
 }
 
+/// This enum encapsulates the syncing status returned by a call to eth_syncing
+/// This will either return a bool 'false' if not syncing, or an object with details
+/// about which blocks are syncing
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum SyncingStatus {
+    NotSyncing(bool),
+    #[serde(rename_all = "camelCase")]
+    Syncing {
+        starting_block: Uint256,
+        current_block: Uint256,
+        highest_block: Uint256,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

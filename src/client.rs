@@ -6,7 +6,7 @@
 //!
 use crate::jsonrpc::client::HttpClient;
 use crate::jsonrpc::error::Web3Error;
-use crate::types::{Block, Log, NewFilter, TransactionRequest, TransactionResponse};
+use crate::types::{Block, Log, NewFilter, SyncingStatus, TransactionRequest, TransactionResponse};
 use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, XdaiBlock};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
@@ -171,13 +171,13 @@ impl Web3 {
 
     /// Returns a bool indicating whether our eth node is currently syncing or not
     pub async fn eth_syncing(&self) -> Result<bool, Web3Error> {
-        let res = self
+        let res: SyncingStatus = self
             .jsonrpc_client
             .request_method("eth_syncing", Vec::<String>::new(), self.timeout)
             .await?;
         match res {
-            false => Ok(false),
-            _ => Ok(true),
+            SyncingStatus::Syncing { .. } => Ok(true),
+            SyncingStatus::NotSyncing(..) => Ok(false),
         }
     }
 
@@ -843,7 +843,10 @@ fn test_dai_block_response() {
 fn test_syncing_check_functions() {
     use actix::System;
     let runner = System::new();
+    ////// TEST ON NON SYNCING BLOCK
     let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    ////// TEST ON SYNCING BLOCK
+    //let web3 = Web3::new("http://127.0.0.1:8545", Duration::from_secs(5));
     runner.block_on(async move {
         let random_address = "0xE04b765c6Ffcc5981DDDcf7e6E2c9E7DB634Df72";
         let val = web3
@@ -865,20 +868,39 @@ fn test_syncing_check_functions() {
         let val = web3.eth_gas_price().await;
         println!("{:?}", val);
 
+        //// CHECK THAT when using syncing block, we retrieve a synced block without error
+        // let val = web3.eth_get_block_by_number(4792816_u128.into()).await;
+        // assert!(!val.is_err());
+
+        // let val = web3.eth_get_block_by_number(4792815_u128.into()).await;
+        // assert!(!val.is_err());
+
+        // let val = web3.eth_get_block_by_number(8792900_u128.into()).await;
+        // assert!(val.is_err());
+        // /////////
+
         let val = web3
             .eth_get_block_by_number(web3.eth_block_number().await.unwrap())
             .await;
         println!("{:?}", val);
 
+        #[allow(unused_variables)]
         let val = web3.eth_get_block_by_number(20000000_u128.into()).await;
-        println!("{:?}", val);
+        //println!("{:?}", val);
 
+        #[allow(unused_variables)]
         let val = web3
             .eth_get_concise_block_by_number(web3.eth_block_number().await.unwrap())
             .await;
+        //println!("{:?}", val);
+
+        let val = web3
+            .eth_get_concise_block_by_number(web3.eth_block_number().await.unwrap() + 1_u128.into())
+            .await;
         println!("{:?}", val);
 
+        #[allow(unused_variables)]
         let val = web3.eth_get_latest_block().await;
-        println!("{:?}", val);
+        //println!("{:?}", val);
     });
 }
