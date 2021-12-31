@@ -77,7 +77,7 @@ impl HttpClient {
             .header(header::CONTENT_TYPE, "application/json")
             .uri(&self.url)
             .body(payload.into())
-            .expect("expected really body");
+            .expect("Expected json body");
 
         // race between the Timeout and the Request - with slight bias towards the request itself
         let result: Result<Bytes, Web3Error> = tokio::select! {
