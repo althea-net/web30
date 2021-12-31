@@ -11,7 +11,7 @@ use tokio::time::error::Elapsed;
 #[derive(Debug)]
 pub enum Web3Error {
     BadResponse(String),
-    JsonRpcError(reqwest::Error),
+    JsonRpcError(hyper::Error),
     InsufficientGas {
         balance: Uint256,
         base_gas: Uint256,
@@ -46,8 +46,8 @@ impl From<Elapsed> for Web3Error {
     }
 }
 
-impl From<reqwest::Error> for Web3Error {
-    fn from(error: reqwest::Error) -> Self {
+impl From<hyper::Error> for Web3Error {
+    fn from(error: hyper::Error) -> Self {
         Web3Error::JsonRpcError(error)
     }
 }
