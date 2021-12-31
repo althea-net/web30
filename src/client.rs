@@ -674,3 +674,12 @@ async fn test_dai_block_response() {
     let val = val.expect("tokio failure");
     assert!(val.number > 10u32.into());
 }
+
+#[tokio::test]
+async fn test_request_timeout() {
+    // we're impatient, wait only 1 milliseconds
+    let web3 = Web3::new("https://dai.althea.net", Duration::from_millis(1));
+
+    let val = web3.xdai_get_latest_block().await;
+    assert!(val.is_err());
+}
