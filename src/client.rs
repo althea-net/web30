@@ -126,11 +126,11 @@ impl Web3 {
                     .jsonrpc_client
                     .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout)
                     .await?;
-                let base_gas = self.get_base_fee_per_gas().await?;
-                Ok(match base_gas {
-                    Some(base_gas) => max(base_gas, median_gas),
-                    None => median_gas,
-                })
+                if let Some(gas) = self.get_base_fee_per_gas().await? {
+                    Ok(gas)
+                } else {
+                    Ok(median_gas)
+                }
             }
             _ => Err(Web3Error::SyncingNode(
                 "Cannot perform eth_gas_price".to_string(),
