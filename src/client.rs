@@ -813,7 +813,7 @@ fn test_transaction_count_response() {
 fn test_block_response() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.altheamesh.com", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
     runner.block_on(async move {
         let val = web3.eth_get_latest_block().await;
         let val = val.expect("Actix failure");
