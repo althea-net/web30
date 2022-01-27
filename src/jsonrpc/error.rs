@@ -11,7 +11,12 @@ use tokio::time::error::Elapsed;
 #[derive(Debug)]
 pub enum Web3Error {
     BadResponse(String),
-    JsonRpcError(hyper::Error),
+    RequestFailed(hyper::Error),
+    JsonRpcError {
+        code: i64,
+        message: String,
+        data: String,
+    },
     InsufficientGas {
         balance: Uint256,
         base_gas: Uint256,
@@ -48,13 +53,13 @@ impl From<Elapsed> for Web3Error {
 
 impl From<hyper::Error> for Web3Error {
     fn from(error: hyper::Error) -> Self {
-        Web3Error::JsonRpcError(error)
+        Web3Error::RequestFailed(error)
     }
 }
 
 impl From<serde_json::Error> for Web3Error {
     fn from(error: serde_json::Error) -> Self {
-        Web3Error::BadResponse(error.to_string())
+        Web3Error::BadResponse(format!("Parsing JSON Failed with: {}", error.to_string()))
     }
 }
 
@@ -63,7 +68,7 @@ impl Display for Web3Error {
         match self {
             Web3Error::BadResponse(val) => write!(f, "Web3 bad response {}", val),
             Web3Error::BadInput(val) => write!(f, "Web3 bad input {}", val),
-            Web3Error::JsonRpcError(val) => write!(f, "Web3 JsonRpc Failed {}", val),
+            Web3Error::RequestFailed(val) => write!(f, "Web3 JsonRpc Failed {}", val),
             Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
             Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
             Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
@@ -88,6 +93,15 @@ impl Display for Web3Error {
             Web3Error::CouldNotRemoveFilter(val) => {
                 write!(f, "Web3 Failed to remove filter from server {}", val)
             }
+            Web3Error::JsonRpcError {
+                code,
+                message,
+                data,
+            } => write!(
+                f,
+                "Web3 Response error code {} message {} data {:?}",
+                code, message, data
+            ),
         }
     }
 }

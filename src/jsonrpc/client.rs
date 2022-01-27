@@ -87,9 +87,16 @@ impl HttpClient {
             _ = time::sleep(timeout) => Err(Web3Error::BadResponse("Request Timed Out".into()))
         };
 
-        let data: JsonResponse<R> = serde_json::from_slice(&result?)?;
-        trace!("got web3 response {:#?}", data);
+        let response: JsonResponse<R> = serde_json::from_slice(&result?)?;
+        trace!("got web3 response {:#?}", response);
 
-        Ok(data.result)
+        match response.data.into_result() {
+            Ok(result) => Ok(result),
+            Err(error) => Err(Web3Error::JsonRpcError {
+                code: error.code,
+                message: error.message,
+                data: format!("{:?}", error.data),
+            }),
+        }
     }
 }
