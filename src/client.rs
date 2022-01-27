@@ -302,7 +302,7 @@ impl Web3 {
         data: Vec<u8>,
         value: Uint256,
         own_address: Address,
-        secret: PrivateKey,
+        secret: &PrivateKey,
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
         let mut gas_price = None;
@@ -677,7 +677,7 @@ async fn test_dai_block_response() {
 
 #[tokio::test]
 async fn test_request_timeout() {
-    // we're impatient, wait only 1 milliseconds
+    // we're impatient, wait only 1 millisecond
     let web3 = Web3::new("https://dai.althea.net", Duration::from_millis(1));
 
     let val = web3.xdai_get_latest_block().await;

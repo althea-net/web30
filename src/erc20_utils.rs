@@ -55,7 +55,7 @@ impl Web3 {
     pub async fn approve_erc20_transfers(
         &self,
         erc20: Address,
-        eth_private_key: EthPrivateKey,
+        eth_private_key: &EthPrivateKey,
         target_contract: Address,
         timeout: Option<Duration>,
         options: Vec<SendTxOption>,
@@ -72,7 +72,7 @@ impl Web3 {
                 payload,
                 0u32.into(),
                 own_address,
-                eth_private_key,
+                &eth_private_key,
                 options,
             )
             .await?;
@@ -132,7 +132,7 @@ impl Web3 {
                 )?,
                 0u32.into(),
                 sender_address,
-                sender_private_key,
+                &sender_private_key,
                 options,
             )
             .await?;

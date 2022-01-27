@@ -21,7 +21,7 @@ impl Web3 {
         let payload = encode_call(sig, &tokens).unwrap();
         let weth_address = weth_address.unwrap_or(*WETH_CONTRACT_ADDRESS);
         let txid = self
-            .send_transaction(weth_address, payload, amount, own_address, secret, vec![])
+            .send_transaction(weth_address, payload, amount, own_address, &secret, vec![])
             .await?;
 
         if let Some(timeout) = wait_timeout {
@@ -52,7 +52,7 @@ impl Web3 {
                 payload,
                 0u16.into(),
                 own_address,
-                secret,
+                &secret,
                 vec![],
             )
             .await?;

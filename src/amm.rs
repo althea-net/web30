@@ -160,7 +160,7 @@ impl Web3 {
     #[allow(clippy::too_many_arguments)]
     pub async fn swap_uniswap(
         &self,
-        eth_private_key: PrivateKey,     // The address swapping tokens
+        eth_private_key: &PrivateKey,    // The address swapping tokens
         token_in: Address,               // The token held
         token_out: Address,              // The desired token
         fee_uint24: Option<Uint256>,     // Actually a uint24 on the callee side
@@ -401,7 +401,7 @@ impl Web3 {
                 payload,
                 amount.clone(),
                 eth_address,
-                eth_private_key,
+                &eth_private_key,
                 options,
             )
             .await?;
@@ -563,7 +563,7 @@ async fn swap_hardhat_test() {
 
     let result = web3
         .swap_uniswap(
-            miner_private_key,
+            &miner_private_key,
             *WETH_CONTRACT_ADDRESS,
             *DAI_CONTRACT_ADDRESS,
             Some(fee.clone()),
@@ -596,7 +596,7 @@ async fn swap_hardhat_test() {
     assert!(dai_gained > 0u8.into());
     let result = web3
         .swap_uniswap(
-            miner_private_key,
+            &miner_private_key,
             *DAI_CONTRACT_ADDRESS,
             *WETH_CONTRACT_ADDRESS,
             Some(fee.clone()),
