@@ -68,7 +68,9 @@ impl Display for Web3Error {
         match self {
             Web3Error::BadResponse(val) => write!(f, "Web3 bad response {}", val),
             Web3Error::BadInput(val) => write!(f, "Web3 bad input {}", val),
-            Web3Error::RequestFailed(val) => write!(f, "Web3 JsonRpc Failed {}", val),
+            Web3Error::RequestFailed(val) => {
+                write!(f, "Web3 Request Failed on the Network {}", val)
+            }
             Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
             Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
             Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
