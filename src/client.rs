@@ -402,7 +402,7 @@ impl Web3 {
             signature: None,
         };
 
-        let transaction = transaction.sign(&secret, Some(network_id));
+        let transaction = transaction.sign(secret, Some(network_id));
 
         self.eth_send_raw_transaction(
             transaction

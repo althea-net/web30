@@ -72,7 +72,7 @@ impl Web3 {
                 payload,
                 0u32.into(),
                 own_address,
-                &eth_private_key,
+                eth_private_key,
                 options,
             )
             .await?;

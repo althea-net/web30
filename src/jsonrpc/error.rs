@@ -59,7 +59,7 @@ impl From<hyper::Error> for Web3Error {
 
 impl From<serde_json::Error> for Web3Error {
     fn from(error: serde_json::Error) -> Self {
-        Web3Error::BadResponse(format!("Parsing JSON Failed with: {}", error.to_string()))
+        Web3Error::BadResponse(format!("Parsing JSON Failed with: {}", error))
     }
 }
 
