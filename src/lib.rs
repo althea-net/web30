@@ -16,5 +16,6 @@ mod event_utils;
 pub mod jsonrpc;
 mod mem;
 pub mod types;
+mod erc721_utils;
 
 pub use event_utils::address_to_event;
