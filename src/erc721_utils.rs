@@ -2,47 +2,15 @@
 use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
-use clarity::{Address, Uint256};
+use clarity::{Address, Uint256, abi::Token};
 use num::Bounded;
 use std::time::Duration;
 use tokio::time::timeout as future_timeout;
+use clarity::Address as EthAddress;
 
 pub static ERC20_GAS_LIMIT: u128 = 100_000;
 
 impl Web3 {
-    /// Checks if any given contract is approved to spend money from any given erc20 contract
-    /// using any given address. What exactly this does can be hard to grok, essentially when
-    /// you want contract A to be able to spend your erc20 contract funds you need to call 'approve'
-    /// on the ERC20 contract with your own address and A's address so that in the future when you call
-    /// contract A it can manipulate your ERC20 balances. This function checks if that has already been done.
-    // pub async fn check_erc20_approved(
-    //     &self,
-    //     erc20: Address,
-    //     own_address: Address,
-    //     target_contract: Address,
-    // ) -> Result<bool, Web3Error> {
-    //     let payload = encode_call(
-    //         "allowance(address,address)",
-    //         &[own_address.into(), target_contract.into()],
-    //     )?;
-    //     let allowance = self
-    //         .simulate_transaction(erc20, 0u8.into(), payload, own_address, None)
-    //         .await?;
-
-    //     let allowance = Uint256::from_bytes_be(match allowance.get(0..32) {
-    //         Some(val) => val,
-    //         None => {
-    //             return Err(Web3Error::ContractCallError(
-    //                 "erc20 allowance(address, address) failed".to_string(),
-    //             ))
-    //         }
-    //     });
-
-    //     // Check if the allowance remaining is greater than half of a Uint256- it's as good
-    //     // a test as any.
-    //     Ok(allowance > (Uint256::max_value() / 2u32.into()))
-    // }
-
     // /// Approves a given contract to spend erc20 funds from the given address from the erc20 contract provided.
     // /// What exactly this does can be hard to grok, essentially when you want contract A to be able to spend
     // /// your erc20 contract funds you need to call 'approve' on the ERC20 contract with your own address and A's
@@ -148,8 +116,6 @@ impl Web3 {
     //     Ok(tx_hash)
     // }
 
-
-
     pub async fn get_erc721_name(
         &self,
         erc721: Address,
@@ -179,6 +145,7 @@ impl Web3 {
         erc721: Address,
         caller_address: Address,
     ) -> Result<String, Web3Error> {
+        info!("in get_erc721_symbol, looking at address {}", erc721);
         let payload = encode_call("symbol()", &[])?;
         let symbol = self
             .simulate_transaction(erc721, 0u8.into(), payload, caller_address, None)
@@ -217,6 +184,40 @@ impl Web3 {
             }
         }))
     }
+
+    /// Checks if any given contract is approved to spend money from any given erc20 contract
+    /// using any given address. What exactly this does can be hard to grok, essentially when
+    /// you want contract A to be able to spend your erc20 contract funds you need to call 'approve'
+    /// on the ERC20 contract with your own address and A's address so that in the future when you call
+    /// contract A it can manipulate your ERC20 balances. This function checks if that has already been done.
+    pub async fn get_erc721_owner_of(
+        &self,
+        erc721: Address,
+        own_address: Address,
+        token_id: Uint256,
+    ) -> Result<EthAddress, Web3Error> {
+        info!("in get_erc721_approved token_id is {}", token_id);
+        info!("own address is {}", own_address);
+        let payload = encode_call(
+            "ownerOf(uint256)",
+            &[Token::Uint(token_id.clone())],
+        )?;
+
+        let val = self
+        .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
+        .await?;
+
+        let mut data: [u8; 20] = Default::default();
+        data.copy_from_slice(&val[12..]);
+        
+        let owner_address = EthAddress::from_slice(&data);
+        match owner_address {
+            Ok(val) => Ok(owner_address),
+            Err(e) => Err(Web3Error::BadResponse(e.to_string())),
+        }
+    }
+
+
 }
 
 #[test]
