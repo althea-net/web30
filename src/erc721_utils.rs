@@ -209,10 +209,10 @@ impl Web3 {
 
         let mut data: [u8; 20] = Default::default();
         data.copy_from_slice(&val[12..]);
-        
         let owner_address = EthAddress::from_slice(&data);
+
         match owner_address {
-            Ok(val) => Ok(val),
+            Ok(address_response) => Ok(address_response),
             Err(e) => Err(Web3Error::BadResponse(e.to_string())),
         }
     }
