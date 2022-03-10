@@ -212,7 +212,7 @@ impl Web3 {
         
         let owner_address = EthAddress::from_slice(&data);
         match owner_address {
-            Ok(val) => Ok(owner_address),
+            Ok(val) => Ok(val),
             Err(e) => Err(Web3Error::BadResponse(e.to_string())),
         }
     }
