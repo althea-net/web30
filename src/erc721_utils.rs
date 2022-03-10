@@ -20,42 +20,44 @@ impl Web3 {
     // /// unlike the lower level eth_send_transaction() this call builds
     // /// the transaction abstracting away details like chain id, gas,
     // /// and network id.
-    // pub async fn approve_erc20_transfers(
-    //     &self,
-    //     erc20: Address,
-    //     eth_private_key: EthPrivateKey,
-    //     target_contract: Address,
-    //     timeout: Option<Duration>,
-    //     options: Vec<SendTxOption>,
-    // ) -> Result<Uint256, Web3Error> {
-    //     let own_address = eth_private_key.to_address();
-    //     let payload = encode_call(
-    //         "approve(address,uint256)",
-    //         &[target_contract.into(), Uint256::max_value().into()],
-    //     )?;
+    pub async fn approve_erc721_transfers(
+        &self,
+        erc721: Address,
+        eth_private_key: EthPrivateKey,
+        target_contract: Address,
+        token_id: Uint256,
+        timeout: Option<Duration>,
+        options: Vec<SendTxOption>,
+    ) -> Result<Uint256, Web3Error> {
+        let own_address = eth_private_key.to_address();
+        // function approve(address _approved, uint256 _tokenId) 
+        let payload = encode_call(
+            "approve(address,uint256)",
+            &[target_contract.into(), Token::Uint(token_id.clone())],
+        )?;
 
-    //     let txid = self
-    //         .send_transaction(
-    //             erc20,
-    //             payload,
-    //             0u32.into(),
-    //             own_address,
-    //             eth_private_key,
-    //             options,
-    //         )
-    //         .await?;
+        let txid = self
+            .send_transaction(
+                erc721,
+                payload,
+                0u32.into(),
+                own_address,
+                eth_private_key,
+                options,
+            )
+            .await?;
 
-    //     // wait for transaction to enter the chain if the user has requested it
-    //     if let Some(timeout) = timeout {
-    //         future_timeout(
-    //             timeout,
-    //             self.wait_for_transaction(txid.clone(), timeout, None),
-    //         )
-    //         .await??;
-    //     }
+        // wait for transaction to enter the chain if the user has requested it
+        if let Some(timeout) = timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(txid.clone(), timeout, None),
+            )
+            .await??;
+        }
 
-    //     Ok(txid)
-    // }
+        Ok(txid)
+    }
 
     // /// Send an erc20 token to the target address, optionally wait until it enters the blockchain
     // /// `options` takes a vector of `SendTxOption` for configuration
@@ -185,19 +187,12 @@ impl Web3 {
         }))
     }
 
-    /// Checks if any given contract is approved to spend money from any given erc20 contract
-    /// using any given address. What exactly this does can be hard to grok, essentially when
-    /// you want contract A to be able to spend your erc20 contract funds you need to call 'approve'
-    /// on the ERC20 contract with your own address and A's address so that in the future when you call
-    /// contract A it can manipulate your ERC20 balances. This function checks if that has already been done.
     pub async fn get_erc721_owner_of(
         &self,
         erc721: Address,
         own_address: Address,
         token_id: Uint256,
     ) -> Result<EthAddress, Web3Error> {
-        info!("in get_erc721_approved token_id is {}", token_id);
-        info!("own address is {}", own_address);
         let payload = encode_call(
             "ownerOf(uint256)",
             &[Token::Uint(token_id.clone())],
@@ -217,6 +212,30 @@ impl Web3 {
         }
     }
 
+    pub async fn check_erc721_approved(
+        &self,
+        erc721: Address,
+        own_address: Address,
+        token_id: Uint256,
+    ) -> Result<EthAddress, Web3Error> {
+        let payload = encode_call(
+            "getApproved(uint256)",
+            &[Token::Uint(token_id.clone())],
+        )?;
+
+        let val = self
+        .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
+        .await?;
+
+        let mut data: [u8; 20] = Default::default();
+        data.copy_from_slice(&val[12..]);
+        let owner_address = EthAddress::from_slice(&data);
+
+        match owner_address {
+            Ok(address_response) => Ok(address_response),
+            Err(e) => Err(Web3Error::BadResponse(e.to_string())),
+        }
+    }
 
 }
 
