@@ -3,7 +3,6 @@ use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
 use clarity::{Address, Uint256, abi::Token};
-use num::Bounded;
 use std::time::Duration;
 use tokio::time::timeout as future_timeout;
 use clarity::Address as EthAddress;
@@ -11,15 +10,8 @@ use clarity::Address as EthAddress;
 pub static ERC20_GAS_LIMIT: u128 = 100_000;
 
 impl Web3 {
-    // /// Approves a given contract to spend erc20 funds from the given address from the erc20 contract provided.
-    // /// What exactly this does can be hard to grok, essentially when you want contract A to be able to spend
-    // /// your erc20 contract funds you need to call 'approve' on the ERC20 contract with your own address and A's
-    // /// address so that in the future when you call contract A it can manipulate your ERC20 balances.
-    // /// This function performs that action and waits for it to complete for up to Timeout duration
-    // /// `options` takes a vector of `SendTxOption` for configuration
-    // /// unlike the lower level eth_send_transaction() this call builds
-    // /// the transaction abstracting away details like chain id, gas,
-    // /// and network id.
+
+    // executes EIP-721 approve(address,uint256)
     pub async fn approve_erc721_transfers(
         &self,
         erc721: Address,
@@ -59,65 +51,57 @@ impl Web3 {
         Ok(txid)
     }
 
-    // /// Send an erc20 token to the target address, optionally wait until it enters the blockchain
-    // /// `options` takes a vector of `SendTxOption` for configuration
-    // /// unlike the lower level eth_send_transaction() this call builds
-    // /// the transaction abstracting away details like chain id, gas,
-    // /// and network id.
-    // /// WARNING: you must specify networkID in situations where a single
-    // /// node is operating no more than one chain. Otherwise it is possible
-    // /// for the full node to trick the client into signing transactions
-    // /// on unintended chains potentially to their benefit
-    // pub async fn erc20_send(
-    //     &self,
-    //     amount: Uint256,
-    //     recipient: Address,
-    //     erc20: Address,
-    //     sender_private_key: EthPrivateKey,
-    //     wait_timeout: Option<Duration>,
-    //     options: Vec<SendTxOption>,
-    // ) -> Result<Uint256, Web3Error> {
-    //     let sender_address = sender_private_key.to_address();
+     // executes EIP-721 transferFrom(address _from, address _to, uint256 _tokenId)
+    pub async fn erc721_send(
+        &self,
+        recipient: Address,
+        erc721: Address,
+        token_id: Uint256,
+        sender_private_key: EthPrivateKey,
+        wait_timeout: Option<Duration>,
+        options: Vec<SendTxOption>,
+    ) -> Result<Uint256, Web3Error> {
+        let sender_address = sender_private_key.to_address();
 
-    //     // if the user sets a gas limit we should honor it, if they don't we
-    //     // should add the default
-    //     let mut has_gas_limit = false;
-    //     let mut options = options;
-    //     for option in options.iter() {
-    //         if let SendTxOption::GasLimit(_) = option {
-    //             has_gas_limit = true;
-    //             break;
-    //         }
-    //     }
-    //     if !has_gas_limit {
-    //         options.push(SendTxOption::GasLimit(ERC20_GAS_LIMIT.into()));
-    //     }
+        let mut has_gas_limit = false;
+        let mut options = options;
+        for option in options.iter() {
+            if let SendTxOption::GasLimit(_) = option {
+                has_gas_limit = true;
+                break;
+            }
+        }
+        if !has_gas_limit {
+            options.push(SendTxOption::GasLimit(ERC20_GAS_LIMIT.into()));
+        }
+        
+        //  EIP-721 standard: transferFrom(address _from, address _to, uint256 _tokenId)
+        let tx_hash = self
+            .send_transaction(
+                erc721,
+                encode_call(
+                    "transferFrom(address,address,uint256)",
+                    &[sender_address.into(), recipient.into(), Token::Uint(token_id.clone())],
+                )?,
+                0u32.into(),
+                sender_address,
+                sender_private_key,
+                options,
+            )
+            .await?;
 
-    //     let tx_hash = self
-    //         .send_transaction(
-    //             erc20,
-    //             encode_call(
-    //                 "transfer(address,uint256)",
-    //                 &[recipient.into(), amount.clone().into()],
-    //             )?,
-    //             0u32.into(),
-    //             sender_address,
-    //             sender_private_key,
-    //             options,
-    //         )
-    //         .await?;
+        if let Some(timeout) = wait_timeout {
+            future_timeout(
+                timeout,
+                self.wait_for_transaction(tx_hash.clone(), timeout, None),
+            )
+            .await??;
+        }
 
-    //     if let Some(timeout) = wait_timeout {
-    //         future_timeout(
-    //             timeout,
-    //             self.wait_for_transaction(tx_hash.clone(), timeout, None),
-    //         )
-    //         .await??;
-    //     }
+        Ok(tx_hash)
+    }
 
-    //     Ok(tx_hash)
-    // }
-
+    // executes EIP-721 meta name() external view returns (string _name)
     pub async fn get_erc721_name(
         &self,
         erc721: Address,
@@ -142,12 +126,12 @@ impl Web3 {
         }
     }
 
+    // executes EIP-721 symbol() external view returns (string _symbol)
     pub async fn get_erc721_symbol(
         &self,
         erc721: Address,
         caller_address: Address,
     ) -> Result<String, Web3Error> {
-        info!("in get_erc721_symbol, looking at address {}", erc721);
         let payload = encode_call("symbol()", &[])?;
         let symbol = self
             .simulate_transaction(erc721, 0u8.into(), payload, caller_address, None)
@@ -166,7 +150,8 @@ impl Web3 {
             )),
         }
     }
-
+    
+    // executes EIP-721 totalSupply() external view returns (uint256)
     pub async fn get_erc721_supply(
         &self,
         erc721: Address,
@@ -187,6 +172,7 @@ impl Web3 {
         }))
     }
 
+    // executes EIP-721 ownerOf(uint256 _tokenId) external view returns (address)
     pub async fn get_erc721_owner_of(
         &self,
         erc721: Address,
@@ -212,6 +198,7 @@ impl Web3 {
         }
     }
 
+    // executes EIP-721 etApproved(uint256 _tokenId) external view returns (address)
     pub async fn check_erc721_approved(
         &self,
         erc721: Address,
