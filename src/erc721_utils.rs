@@ -172,6 +172,33 @@ impl Web3 {
         }))
     }
 
+    // executes EIP-721 tokenURI(uint256 _tokenId) external view returns (string);
+    pub async fn get_erc721_uri(
+        &self,
+        erc721: Address,
+        caller_address: Address,
+        token_id: Uint256,
+    ) -> Result<String, Web3Error> {
+        let payload = encode_call("tokenURI(uint256)",
+         &[Token::Uint(token_id.clone())])?;
+        let symbol = self
+            .simulate_transaction(erc721, 0u8.into(), payload, caller_address, None)
+            .await?;
+
+        match String::from_utf8(symbol) {
+            Ok(mut val) => {
+                // the value returned is actually in Ethereum ABI encoded format
+                // stripping control characters is an easy way to strip off the encoding
+                val.retain(|v| !v.is_control());
+                let val = val.trim().to_string();
+                Ok(val)
+            }
+            Err(_e) => Err(Web3Error::ContractCallError(
+                "name is not valid utf8".to_string(),
+            )),
+        }
+    }
+
     // executes EIP-721 ownerOf(uint256 _tokenId) external view returns (address)
     pub async fn get_erc721_owner_of(
         &self,
@@ -198,7 +225,7 @@ impl Web3 {
         }
     }
 
-    // executes EIP-721 etApproved(uint256 _tokenId) external view returns (address)
+    // executes EIP-721 getApproved(uint256 _tokenId) external view returns (address)
     pub async fn check_erc721_approved(
         &self,
         erc721: Address,
@@ -238,6 +265,9 @@ fn test_erc721_metadata() {
     let caller_address = "0x503828976D22510aad0201ac7EC88293211D23Da"
         .parse()
         .unwrap();
+    let token_id = 1039_i32; 
+    let token_id_uint =  Uint256::from_bytes_be(&token_id.to_be_bytes());
+    let token_id_uri = ":ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/1039";
     runner.block_on(async move {
         let num: Uint256 = 1000u32.into();
         assert!(
@@ -257,6 +287,12 @@ fn test_erc721_metadata() {
                 .await
                 .unwrap(),
             "BoredApeYachtClub"
+        );
+        assert_eq!(
+            web3.get_erc721_uri(bayc_address, caller_address, token_id_uint)
+                .await
+                .unwrap(),
+            token_id_uri
         );
     })
 }
