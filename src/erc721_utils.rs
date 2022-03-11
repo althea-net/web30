@@ -1,4 +1,4 @@
-//! This module contains utility functions for interacting with ERC20 tokens and contracts
+//! This module contains utility functions for interacting with ERC721 tokens and contracts
 use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
@@ -7,7 +7,7 @@ use std::time::Duration;
 use tokio::time::timeout as future_timeout;
 use clarity::Address as EthAddress;
 
-pub static ERC20_GAS_LIMIT: u128 = 100_000;
+pub static ERC721_GAS_LIMIT: u128 = 100_000;
 
 impl Web3 {
 
@@ -72,7 +72,7 @@ impl Web3 {
             }
         }
         if !has_gas_limit {
-            options.push(SendTxOption::GasLimit(ERC20_GAS_LIMIT.into()));
+            options.push(SendTxOption::GasLimit(ERC721_GAS_LIMIT.into()));
         }
         
         //  EIP-721 standard: transferFrom(address _from, address _to, uint256 _tokenId)
