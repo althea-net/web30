@@ -10,8 +10,47 @@ use clarity::Address as EthAddress;
 pub static ERC721_GAS_LIMIT: u128 = 100_000;
 
 impl Web3 {
+    /// Executes EIP-721 getApproved(uint256 _tokenId) external view returns (address)
+    /// Checks if any given contract is approved to spend money from any given erc721 contract
+    /// using any given address. What exactly this does can be hard to grok, essentially when
+    /// you want contract A to be able to spend your erc721 contract funds you need to call 'approve'
+    /// on the ERC721 contract with your own address and A's address so that in the future when you call
+    /// contract A it can move the ERC721 token. This function checks if that has already been done.
+    pub async fn check_erc721_approved(
+        &self,
+        erc721: Address,
+        own_address: Address,
+        token_id: Uint256,
+    ) -> Result<EthAddress, Web3Error> {
+        let payload = encode_call(
+            "getApproved(uint256)",
+            &[Token::Uint(token_id.clone())],
+        )?;
 
-    // executes EIP-721 approve(address,uint256)
+        let val = self
+        .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
+        .await?;
+
+        let mut data: [u8; 20] = Default::default();
+        data.copy_from_slice(&val[12..]);
+        let owner_address = EthAddress::from_slice(&data);
+
+        match owner_address {
+            Ok(address_response) => Ok(address_response),
+            Err(e) => Err(Web3Error::BadResponse(e.to_string())),
+        }
+    }
+
+    /// Executes EIP-721 approve(address,uint256)
+    /// Approves a given contract to transfer ERC721 tokens from the given address from the erc721 contract provided.
+    /// What exactly this does can be hard to grok, essentially when you want contract A to be able to spend
+    /// your erc721 contract tokens you need to call 'approve' on the ERC721 contract with your own address and A's
+    /// address so that in the future when you call contract A it can manipulate your ERC721 ownership.
+    /// This function performs that action and waits for it to complete for up to Timeout duration
+    /// `options` takes a vector of `SendTxOption` for configuration
+    /// unlike the lower level eth_send_transaction() this call builds
+    /// the transaction abstracting away details like chain id, gas,
+    /// and network id.
     pub async fn approve_erc721_transfers(
         &self,
         erc721: Address,
@@ -51,7 +90,16 @@ impl Web3 {
         Ok(txid)
     }
 
-     // executes EIP-721 transferFrom(address _from, address _to, uint256 _tokenId)
+    /// Executes EIP-721 transferFrom(address _from, address _to, uint256 _tokenId)
+    /// Send an erc721 token to the target address, optionally wait until it enters the blockchain
+    /// `options` takes a vector of `SendTxOption` for configuration
+    /// unlike the lower level eth_send_transaction() this call builds
+    /// the transaction abstracting away details like chain id, gas,
+    /// and network id.
+    /// WARNING: you must specify networkID in situations where a single
+    /// node is operating no more than one chain. Otherwise it is possible
+    /// for the full node to trick the client into signing transactions
+    /// on unintended chains potentially to their benefit
     pub async fn erc721_send(
         &self,
         recipient: Address,
@@ -74,8 +122,6 @@ impl Web3 {
         if !has_gas_limit {
             options.push(SendTxOption::GasLimit(ERC721_GAS_LIMIT.into()));
         }
-        
-        //  EIP-721 standard: transferFrom(address _from, address _to, uint256 _tokenId)
         let tx_hash = self
             .send_transaction(
                 erc721,
@@ -101,7 +147,9 @@ impl Web3 {
         Ok(tx_hash)
     }
 
-    // executes EIP-721 meta name() external view returns (string _name)
+    /// Executes EIP-721 name() external view returns (string _name)
+    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// string representing ERC721 name or Web3Error::ContractCallError
     pub async fn get_erc721_name(
         &self,
         erc721: Address,
@@ -126,7 +174,9 @@ impl Web3 {
         }
     }
 
-    // executes EIP-721 symbol() external view returns (string _symbol)
+    /// Executes EIP-721 symbol() external view returns (string _symbol)
+    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// string representing ERC721 symbol or Web3Error::ContractCallError
     pub async fn get_erc721_symbol(
         &self,
         erc721: Address,
@@ -151,7 +201,9 @@ impl Web3 {
         }
     }
     
-    // executes EIP-721 totalSupply() external view returns (uint256)
+    /// Executes EIP-721 totalSupply() external view returns (uint256)
+    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// Uint256 representing ERC721 supply or Web3Error::ContractCallError
     pub async fn get_erc721_supply(
         &self,
         erc721: Address,
@@ -172,7 +224,9 @@ impl Web3 {
         }))
     }
 
-    // executes EIP-721 tokenURI(uint256 _tokenId) external view returns (string);
+    /// Executes EIP-721 tokenURI(uint256 _tokenId) external view returns (string);
+    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// string representing ERC721 URI or Web3Error::ContractCallError
     pub async fn get_erc721_uri(
         &self,
         erc721: Address,
@@ -199,7 +253,9 @@ impl Web3 {
         }
     }
 
-    // executes EIP-721 ownerOf(uint256 _tokenId) external view returns (address)
+    /// Executes EIP-721 ownerOf(uint256 _tokenId) external view returns (address)
+    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// string representing ERC721 owner or Web3Error::ContractCallError
     pub async fn get_erc721_owner_of(
         &self,
         erc721: Address,
@@ -208,32 +264,6 @@ impl Web3 {
     ) -> Result<EthAddress, Web3Error> {
         let payload = encode_call(
             "ownerOf(uint256)",
-            &[Token::Uint(token_id.clone())],
-        )?;
-
-        let val = self
-        .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
-        .await?;
-
-        let mut data: [u8; 20] = Default::default();
-        data.copy_from_slice(&val[12..]);
-        let owner_address = EthAddress::from_slice(&data);
-
-        match owner_address {
-            Ok(address_response) => Ok(address_response),
-            Err(e) => Err(Web3Error::BadResponse(e.to_string())),
-        }
-    }
-
-    // executes EIP-721 getApproved(uint256 _tokenId) external view returns (address)
-    pub async fn check_erc721_approved(
-        &self,
-        erc721: Address,
-        own_address: Address,
-        token_id: Uint256,
-    ) -> Result<EthAddress, Web3Error> {
-        let payload = encode_call(
-            "getApproved(uint256)",
             &[Token::Uint(token_id.clone())],
         )?;
 
