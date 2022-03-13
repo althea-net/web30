@@ -1,11 +1,11 @@
 //! This module contains utility functions for interacting with ERC721 tokens and contracts
 use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
+use clarity::Address as EthAddress;
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
-use clarity::{Address, Uint256, abi::Token};
+use clarity::{abi::Token, Address, Uint256};
 use std::time::Duration;
 use tokio::time::timeout as future_timeout;
-use clarity::Address as EthAddress;
 
 pub static ERC721_GAS_LIMIT: u128 = 100_000;
 
@@ -22,14 +22,11 @@ impl Web3 {
         own_address: Address,
         token_id: Uint256,
     ) -> Result<EthAddress, Web3Error> {
-        let payload = encode_call(
-            "getApproved(uint256)",
-            &[Token::Uint(token_id.clone())],
-        )?;
+        let payload = encode_call("getApproved(uint256)", &[Token::Uint(token_id.clone())])?;
 
         let val = self
-        .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
-        .await?;
+            .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
+            .await?;
 
         let mut data: [u8; 20] = Default::default();
         data.copy_from_slice(&val[12..]);
@@ -61,7 +58,7 @@ impl Web3 {
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
         let own_address = eth_private_key.to_address();
-        // function approve(address _approved, uint256 _tokenId) 
+        // function approve(address _approved, uint256 _tokenId)
         let payload = encode_call(
             "approve(address,uint256)",
             &[target_contract.into(), Token::Uint(token_id.clone())],
@@ -127,7 +124,11 @@ impl Web3 {
                 erc721,
                 encode_call(
                     "transferFrom(address,address,uint256)",
-                    &[sender_address.into(), recipient.into(), Token::Uint(token_id.clone())],
+                    &[
+                        sender_address.into(),
+                        recipient.into(),
+                        Token::Uint(token_id.clone()),
+                    ],
                 )?,
                 0u32.into(),
                 sender_address,
@@ -148,7 +149,7 @@ impl Web3 {
     }
 
     /// Executes EIP-721 name() external view returns (string _name)
-    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// Here we make a call using the EIP-721 standard, it will return a
     /// string representing ERC721 name or Web3Error::ContractCallError
     pub async fn get_erc721_name(
         &self,
@@ -175,7 +176,7 @@ impl Web3 {
     }
 
     /// Executes EIP-721 symbol() external view returns (string _symbol)
-    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// Here we make a call using the EIP-721 standard, it will return a
     /// string representing ERC721 symbol or Web3Error::ContractCallError
     pub async fn get_erc721_symbol(
         &self,
@@ -200,9 +201,9 @@ impl Web3 {
             )),
         }
     }
-    
+
     /// Executes EIP-721 totalSupply() external view returns (uint256)
-    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// Here we make a call using the EIP-721 standard, it will return a
     /// Uint256 representing ERC721 supply or Web3Error::ContractCallError
     pub async fn get_erc721_supply(
         &self,
@@ -225,7 +226,7 @@ impl Web3 {
     }
 
     /// Executes EIP-721 tokenURI(uint256 _tokenId) external view returns (string);
-    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// Here we make a call using the EIP-721 standard, it will return a
     /// string representing ERC721 URI or Web3Error::ContractCallError
     pub async fn get_erc721_uri(
         &self,
@@ -233,8 +234,7 @@ impl Web3 {
         caller_address: Address,
         token_id: Uint256,
     ) -> Result<String, Web3Error> {
-        let payload = encode_call("tokenURI(uint256)",
-         &[Token::Uint(token_id.clone())])?;
+        let payload = encode_call("tokenURI(uint256)", &[Token::Uint(token_id.clone())])?;
         let symbol = self
             .simulate_transaction(erc721, 0u8.into(), payload, caller_address, None)
             .await?;
@@ -254,7 +254,7 @@ impl Web3 {
     }
 
     /// Executes EIP-721 ownerOf(uint256 _tokenId) external view returns (address)
-    /// Here we make a call using the EIP-721 standard, it will return a 
+    /// Here we make a call using the EIP-721 standard, it will return a
     /// string representing ERC721 owner or Web3Error::ContractCallError
     pub async fn get_erc721_owner_of(
         &self,
@@ -262,14 +262,11 @@ impl Web3 {
         own_address: Address,
         token_id: Uint256,
     ) -> Result<EthAddress, Web3Error> {
-        let payload = encode_call(
-            "ownerOf(uint256)",
-            &[Token::Uint(token_id.clone())],
-        )?;
+        let payload = encode_call("ownerOf(uint256)", &[Token::Uint(token_id.clone())])?;
 
         let val = self
-        .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
-        .await?;
+            .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
+            .await?;
 
         let mut data: [u8; 20] = Default::default();
         data.copy_from_slice(&val[12..]);
@@ -280,7 +277,6 @@ impl Web3 {
             Err(e) => Err(Web3Error::BadResponse(e.to_string())),
         }
     }
-
 }
 
 #[test]
@@ -295,8 +291,8 @@ fn test_erc721_metadata() {
     let caller_address = "0x503828976D22510aad0201ac7EC88293211D23Da"
         .parse()
         .unwrap();
-    let token_id = 1039_i32; 
-    let token_id_uint =  Uint256::from_bytes_be(&token_id.to_be_bytes());
+    let token_id = 1039_i32;
+    let token_id_uint = Uint256::from_bytes_be(&token_id.to_be_bytes());
     let token_id_uri = ":ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/1039";
     runner.block_on(async move {
         let num: Uint256 = 1000u32.into();
