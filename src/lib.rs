@@ -11,6 +11,7 @@ extern crate lazy_static;
 pub mod amm;
 pub mod client;
 mod erc20_utils;
+mod erc721_utils;
 pub mod eth_wrapping;
 mod event_utils;
 pub mod jsonrpc;
