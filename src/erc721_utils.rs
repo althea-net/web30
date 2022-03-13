@@ -1,6 +1,7 @@
 //! This module contains utility functions for interacting with ERC721 tokens and contracts
 use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
+use clarity::constants::ZERO_ADDRESS;
 use clarity::Address as EthAddress;
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
 use clarity::{abi::Token, Address, Uint256};
@@ -21,7 +22,7 @@ impl Web3 {
         erc721: Address,
         own_address: Address,
         token_id: Uint256,
-    ) -> Result<EthAddress, Web3Error> {
+    ) -> Result<Option<EthAddress>, Web3Error> {
         let payload = encode_call("getApproved(uint256)", &[Token::Uint(token_id.clone())])?;
 
         let val = self
@@ -33,7 +34,13 @@ impl Web3 {
         let owner_address = EthAddress::from_slice(&data);
 
         match owner_address {
-            Ok(address_response) => Ok(address_response),
+            Ok(address_response) => {
+                if address_response == *ZERO_ADDRESS {
+                    Ok(None)
+                } else {
+                    Ok(Some(address_response))
+                }
+            }
             Err(e) => Err(Web3Error::BadResponse(e.to_string())),
         }
     }
