@@ -14,6 +14,7 @@ mod erc20_utils;
 mod erc721_utils;
 pub mod eth_wrapping;
 mod event_utils;
+pub mod gas_estimator;
 pub mod jsonrpc;
 mod mem;
 pub mod types;
