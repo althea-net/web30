@@ -655,7 +655,7 @@ fn swap_hardhat_eth_in_test() {
     use actix::System;
     use env_logger::{Builder, Env};
     use std::time::Duration;
-    Builder::from_env(Env::default().default_filter_or("warn")).init(); // Change to debug for logs
+    Builder::from_env(Env::default().default_filter_or("warn")).init(); // Change to warn for logs
     let runner = System::new();
 
     let web3 = Web3::new("http://localhost:8545", Duration::from_secs(300));

@@ -10,7 +10,7 @@ use std::time::Instant;
 /// sample_time is only used for stale identification but it should
 /// be generally useful in improving accuracy elsewhere
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct GasPriceEntry {
+pub struct GasPriceEntry {
     sample_time: Instant,
     sample: Uint256,
 }
@@ -20,10 +20,10 @@ impl Ord for GasPriceEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         let size1 = &self.sample;
         let size2 = &other.sample;
-        if size1 > size2 {
+        if size1 < size2 {
             return Ordering::Less;
         }
-        if size1 < size2 {
+        if size1 > size2 {
             return Ordering::Greater;
         }
         Ordering::Equal
@@ -33,11 +33,7 @@ impl Ord for GasPriceEntry {
 // boilerplate partial ord impl using above Ord
 impl PartialOrd for GasPriceEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.sample_time.partial_cmp(&other.sample_time) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.sample.partial_cmp(&other.sample)
+        Some(self.cmp(other))
     }
 }
 
@@ -58,6 +54,30 @@ impl GasTracker {
             history: VecDeque::new(),
             size,
         }
+    }
+
+    /// Returns the current number of stored gas prices
+    pub fn get_current_size(&self) -> usize {
+        self.history.len()
+    }
+
+    /// Returns a copy of the stored gas price history
+    pub fn get_history(&self) -> VecDeque<GasPriceEntry> {
+        self.history.clone()
+    }
+
+    /// Increases the history size limit
+    /// returns an error if the history is already larger than the input size
+    pub fn expand_history_size(&mut self, size: usize) {
+        if self.history.len() > size {
+            return;
+        }
+        self.size = size;
+    }
+
+    /// Gets the most recently stored gas price
+    pub fn latest_gas_price(&self) -> Option<Uint256> {
+        self.history.front().map(|price| price.sample.clone())
     }
 
     /// Gets the latest gas price and adds it to the array if this fails
@@ -105,10 +125,91 @@ impl GasTracker {
 
         let mut vector: Vec<&GasPriceEntry> = Vec::from_iter(self.history.iter());
         vector.sort();
-
         // this should never panic as percentage is less than 1 and vector len is
         // included as a factor
         let lowest: usize = (percentage * vector.len() as f32).floor() as usize;
         Some(vector[lowest].sample.clone())
+    }
+}
+
+/// Tests actual gas price storage by simultaneously requesting gas price and updating the GasTracker
+#[test]
+fn test_gas_storage() {
+    use actix::System;
+    use futures::future::join;
+    use std::time::Duration;
+
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+
+    runner.block_on(async move {
+        let mut tracker = GasTracker::new(10);
+
+        let gas_fut = web3.eth_gas_price();
+        let track_fut = tracker.update(&web3);
+        let (gas, track) = join(gas_fut, track_fut).await;
+        let gas = gas.expect("Actix failure");
+
+        assert!(
+            track.is_some() && gas == track.clone().unwrap(),
+            "bad gas price stored - actual {} != stored {:?}",
+            gas,
+            track
+        );
+    });
+}
+
+/// Checks that the acceptable gas prices are as expected with prices in the range of 0-99
+#[test]
+fn test_acceptable_gas_price() {
+    use env_logger::{Builder, Env};
+    use std::time::Instant;
+    Builder::from_env(Env::default().default_filter_or("info")).init(); // Change log level
+
+    // the numbers 0-99 in no particular order
+    let history_values: Vec<u8> = vec![
+        33, 67, 22, 57, 78, 1, 56, 49, 81, 18, 17, 7, 50, 99, 84, 89, 13, 59, 14, 27, 75, 24, 82,
+        63, 31, 2, 4, 41, 79, 92, 45, 20, 30, 34, 25, 64, 21, 0, 86, 46, 32, 19, 11, 51, 71, 70,
+        62, 29, 35, 88, 94, 77, 43, 9, 65, 44, 69, 8, 90, 16, 58, 97, 87, 83, 15, 12, 61, 60, 48,
+        37, 73, 53, 74, 95, 98, 96, 23, 93, 91, 10, 40, 66, 42, 5, 36, 55, 54, 72, 47, 39, 28, 85,
+        6, 3, 76, 38, 80, 68, 52, 26,
+    ];
+
+    // Create a gas tracker with the above values and unimportant sample_times
+    let history = history_values.iter().map(|v| GasPriceEntry {
+        sample: (*v).into(),
+        sample_time: Instant::now(),
+    });
+    let tracker = GasTracker {
+        history: VecDeque::from_iter(history),
+        size: 100,
+    };
+
+    // All the values directly align to percentage values, so we ensure the gas tracker returns
+    // x +- 1 when requesting the lowest x% price
+    for i in history_values {
+        if i == 0 {
+            // expected_low panics on i = 0
+            continue;
+        }
+        let expect = f32::from(i).floor();
+        let percent = expect / 100.0;
+
+        let expected_high = Uint256::from((expect as u32) + 1u32);
+        let expected_low = Uint256::from((expect as u32) - 1u32);
+        let acceptable = tracker.get_acceptable_gas_price(percent);
+        assert!(
+            acceptable.is_some(),
+            "got None from get_acceptable_gas_price with nonempty history"
+        );
+        let acceptable = acceptable.unwrap();
+        assert!(
+            acceptable <= expected_high && acceptable >= expected_low,
+            "percentage {:.8} expected range [{:?} <= {:?} <= {:?}]",
+            percent,
+            expected_low,
+            acceptable,
+            expected_high,
+        )
     }
 }
