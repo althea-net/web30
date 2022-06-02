@@ -44,8 +44,8 @@ impl Web3 {
     /// * `token_in` - The address of an ERC20 token to offer up
     /// * `token_out` - The address of an ERC20 token to receive
     /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
-    ///    Defaults to the medium pool fee of 0.05%
-    ///    The suggested pools are 0.05% (500), 0.3% (3000), and 1% (10000) but more may be added permissionlessly
+    ///    Defaults to the pool fee of 0.3%
+    ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
     /// * `sqrt_price_limit_x96_uint160` - Optional square root price limit, see methods below for more information
     /// * `uniswap_quoter` - Optional address of the Uniswap v3 quoter to contact
     ///
@@ -81,7 +81,7 @@ impl Web3 {
     ) -> Result<Uint256, Web3Error> {
         let quoter = uniswap_quoter.unwrap_or(*UNISWAP_QUOTER_ADDRESS);
 
-        let fee_uint24 = fee_uint24.unwrap_or_else(|| 500u32.into());
+        let fee_uint24 = fee_uint24.unwrap_or_else(|| 3000u32.into());
         if bad_fee(&fee_uint24) {
             return Err(Web3Error::BadInput(
                 "Bad fee input to swap price - value too large for uint24".to_string(),
@@ -161,7 +161,7 @@ impl Web3 {
     /// * `token_out` - The address of the ERC20 token to receive
     /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
     ///    Defaults to the medium pool fee of 0.3%
-    ///    The initial pools are 0.05% (500), 0.3% (3000), and 1% (10000) but more may be added
+    ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
     /// * `amount` - The amount of `token_in` to exchange for as much `token_out` as possible
     /// * `deadline` - Optional deadline to the swap before it is cancelled, 10 minutes if None
     /// * `amount_out_min` - Optional minimum amount of `token_out` to receive or the swap is cancelled, ignored if None
@@ -341,7 +341,7 @@ impl Web3 {
     /// * `token_out` - The address of the ERC20 token to receive
     /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
     ///    Defaults to the medium pool fee of 0.3%
-    ///    The initial pools are 0.05% (500), 0.3% (3000), and 1% (10000) but more may be added
+    ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
     /// * `amount` - The amount of `token_in` to exchange for as much `token_out` as possible
     /// * `deadline` - Optional deadline to the swap before it is cancelled, 10 minutes if None
     /// * `amount_out_min` - Optional minimum amount of `token_out` to receive or the swap is cancelled,
@@ -493,11 +493,11 @@ impl Web3 {
         caller_address: Address, // an unimportant ethereum address with any amount of ether
         token_a: Address,        // one of the tokens in the pool
         token_b: Address,        // the other token in the pool
-        fee_uint24: Option<Uint256>, // The 0.05% fee pool will be used if not specified
+        fee_uint24: Option<Uint256>, // The 0.3% fee pool will be used if not specified
         uniswap_factory: Option<Address>, // The default factory will be used if none is provided
     ) -> Result<Address, Web3Error> {
         let factory = uniswap_factory.unwrap_or(*UNISWAP_FACTORY_ADDRESS);
-        let fee_uint24 = fee_uint24.unwrap_or_else(|| 500u16.into());
+        let fee_uint24 = fee_uint24.unwrap_or_else(|| 3000u16.into());
         let tokens: Vec<Token> = vec![token_a.into(), token_b.into(), Token::Uint(fee_uint24)];
         let payload = encode_call("getPool(address,address,uint24)", &tokens)?;
 
