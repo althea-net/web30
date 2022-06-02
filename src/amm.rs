@@ -605,7 +605,7 @@ impl Web3 {
         amount: Uint256, // the amount of token_in to swap for an unknown amount of token_out
         token_in: Address, // the held token
         token_out: Address, // the desired token
-        fee: Uint256, // the fee value of the Uniswap pool, in hundredths of basis points (e.g. 0.5% -> 500)
+        fee: Uint256, // the fee value of the Uniswap pool, in hundredths of basis points (e.g. 0.05% -> 500)
         caller_address: Address, // an unimportant ethereum address with any amount of ether
     ) -> Result<Uint256, Web3Error> {
         // Compute a sensible default from sqrt price limit
@@ -737,7 +737,7 @@ pub fn scale_uniswap_sqrt_price(
     uniswap_sqrt_price_from_price(scaled_price) // convert back to sqrt_price
 }
 
-/// This test acquires the sqrt price from the Uniswap v3 DAI / WETH 0.5% pool, then simulates 4 swaps with varying
+/// This test acquires the sqrt price from the Uniswap v3 DAI / WETH 0.05% pool, then simulates 4 swaps with varying
 /// sqrt price limits, amounts being swapped, and asserts that our sqrt price limit methods work as expected
 ///
 /// This test is ignored because it suffers from EIP 1559 failures intermittently, where we try to specify a good
@@ -913,7 +913,7 @@ async fn attempt_swap_with_limit(
     sqrt_price_no_slippage: Uint256,   // the current sqrt price stored in the uniswap pool
     sqrt_price_with_slippage: Uint256, // a sqrt price with a bit of slippage tolerance factored in
     amount: Uint256,                   // the amount to swap
-    pool_fee: Uint256, // the fee level of the pool, given in hundredths of basis points (e.g. 0.5% -> 500)
+    pool_fee: Uint256, // the fee level of the pool, given in hundredths of basis points (e.g. 0.05% -> 500)
     expect_failure: bool, // whether or not the amount swapped should violate sqrt_price_with_slippage, causing a panic
 ) {
     let base_spot_price = decode_uniswap_sqrt_price(sqrt_price_no_slippage);
