@@ -162,9 +162,9 @@ fn test_gas_storage() {
 /// Checks that the acceptable gas prices are as expected with prices in the range of 0-99
 #[test]
 fn test_acceptable_gas_price() {
-    use env_logger::{Builder, Env};
     use std::time::Instant;
-    Builder::from_env(Env::default().default_filter_or("info")).init(); // Change log level
+    // use env_logger::{Builder, Env};
+    // Builder::from_env(Env::default().default_filter_or("info")).init(); // Change log level
 
     // the numbers 0-99 in no particular order
     let history_values: Vec<u8> = vec![
