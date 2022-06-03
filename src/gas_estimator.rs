@@ -11,8 +11,18 @@ use std::time::Instant;
 /// be generally useful in improving accuracy elsewhere
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GasPriceEntry {
-    sample_time: Instant,
-    sample: Uint256,
+    pub sample_time: Instant,
+    pub sample: Uint256,
+}
+
+impl GasPriceEntry {
+    /// Creates a new GasPriceEntry with sample_time now()
+    pub fn new(sample: Uint256) -> Self {
+        GasPriceEntry {
+            sample_time: Instant::now(),
+            sample,
+        }
+    }
 }
 
 // implement ord ignoring sample_time
@@ -80,35 +90,48 @@ impl GasTracker {
         self.history.front().map(|price| price.sample.clone())
     }
 
+    /// Samples Ethereum gas prices and creates a new GasPriceEntry on success
+    /// If you are not running GasTracker multi-threaded, consider sample_and_update()
+    pub async fn sample(web30: &Web3) -> Option<GasPriceEntry> {
+        match web30.eth_gas_price().await {
+            Ok(price) => Some(GasPriceEntry::new(price)),
+            Err(e) => {
+                warn!("Unable to sample gas prices with: {:?}", e);
+                None
+            }
+        }
+    }
+
+    /// Updates the latest gas price and adds it to the array
+    /// To obtain a sample, use GasTracker::sample(), or use sample_and_update() if
+    /// you are not running the GasTracker multi-threaded
+    pub fn update(&mut self, sample: GasPriceEntry) {
+        match self.history.len().cmp(&self.size) {
+            Ordering::Less => {
+                self.history.push_front(sample);
+            }
+            Ordering::Equal => {
+                //vec is full, remove oldest entry
+                self.history.pop_back();
+                self.history.push_front(sample);
+            }
+            Ordering::Greater => {
+                panic!("Vec size greater than max size, error in GasTracker vecDeque logic")
+            }
+        }
+    }
+
     /// Gets the latest gas price and adds it to the array if this fails
     /// the sample is skipped, returns a gas price if one is successfully added
-    pub async fn update(&mut self, web30: &Web3) -> Option<Uint256> {
-        let sample = web30.eth_gas_price().await;
+    pub async fn sample_and_update(&mut self, web30: &Web3) -> Option<Uint256> {
+        let sample = GasTracker::sample(web30).await;
         match sample {
-            Ok(sample) => {
-                let sample_time = Instant::now();
-                let entry = GasPriceEntry {
-                    sample_time,
-                    sample: sample.clone(),
-                };
-                match self.history.len().cmp(&self.size) {
-                    Ordering::Less => {
-                        self.history.push_front(entry);
-                        Some(sample)
-                    }
-                    Ordering::Equal => {
-                        //vec is full, remove oldest entry
-                        self.history.pop_back();
-                        self.history.push_front(entry);
-                        Some(sample)
-                    }
-                    Ordering::Greater => {
-                        panic!("Vec size greater than max size, error in GasTracker vecDeque logic")
-                    }
-                }
+            Some(entry) => {
+                self.update(entry.clone());
+                Some(entry.sample)
             }
-            Err(e) => {
-                warn!("Failed to update gas price sample with {:?}", e);
+            None => {
+                warn!("Failed to update gas price sample");
                 None
             }
         }
@@ -146,7 +169,7 @@ fn test_gas_storage() {
         let mut tracker = GasTracker::new(10);
 
         let gas_fut = web3.eth_gas_price();
-        let track_fut = tracker.update(&web3);
+        let track_fut = tracker.sample_and_update(&web3);
         let (gas, track) = join(gas_fut, track_fut).await;
         let gas = gas.expect("Actix failure");
 
