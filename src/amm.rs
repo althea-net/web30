@@ -31,23 +31,134 @@ lazy_static! {
     /// The Wrapped Ether's address, on prod Ethereum
     pub static ref WETH_CONTRACT_ADDRESS: Address =
         Address::parse_and_validate("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2").unwrap();
+
+    // The suggested Uniswap v3 pool fee levels in order:
+    // 0.3% (most pairs), 0.05% (for stable pairs), 0.01% (very stable pairs), 1% (exotic pairs)
+    pub static ref UNISWAP_STANDARD_POOL_FEES: [Uint256; 4] =
+        [3000u16.into(), 500u16.into(), 100u16.into(), 10000u16.into()];
 }
 
 impl Web3 {
-    /// Checks Uniswap v3 to get the amount of `token_out` obtainable for `amount` of `token_in`
+    /// Checks all the standard Uniswap v3 fee pools to get the amount of `token_out` obtainable for `amount` of `token_in`, accounting for slippage
+    /// A pool with low liquidity will have its price rejected
+    /// This method is particularly useful for newer tokens which may not have a 0.3% fee pool in Uniswap v3
+    /// The queried fee levels are 0.3%, 0.05%, 1%, and 0.01%
+    /// This method repeatedly simulates transactions using the Uniswap Quoter, it does not swap any funds
+    pub async fn get_uniswap_price_with_retries(
+        &self,
+        token_in: Address,         // the held token
+        token_out: Address,        // the desired token
+        amount: Uint256,           // the amount of token_in to swap
+        max_slippage: Option<f64>, // optional maximum slippage to tolerate, defaults to 0.5%
+        caller_address: Address,   // an arbitrary ethereum address with some amount of Ether
+    ) -> Result<Uint256, Web3Error> {
+        let max_slippage = max_slippage.unwrap_or(0.005f64);
+        for fee in &*UNISWAP_STANDARD_POOL_FEES {
+            let swap_res = self
+                .get_uniswap_price_with_slippage(
+                    caller_address,
+                    token_in,
+                    token_out,
+                    Some(fee.clone()),
+                    amount.clone(),
+                    Some(max_slippage),
+                    None,
+                )
+                .await;
+            if swap_res.is_ok() {
+                return Ok(swap_res.unwrap());
+            }
+        }
+
+        Err(Web3Error::BadResponse(
+            "No such pool or liquidity too low".to_string(),
+        ))
+    }
+
+    /// An easy to use price checker simulating a Uniswap v3 swap for `amount` of `token_in` to get `token_out`, accounting for slippage
+    /// A sensible fee level of the pool and slippage amount will be calculated if None are provided
+    /// This method simulates a transaction using the Uniswap Quoter, it does not swap any funds
+    /// # Arguments
+    ///
+    /// * `caller_address` - The ethereum address simulating the swap
+    /// * `token_in` - The address of an ERC20 token to offer up
+    /// * `token_out` - The address of an ERC20 token to receive
+    /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
+    ///    Defaults to the pool fee of 0.3%
+    ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
+    /// * `amount` - the amount of token_in to swap for some amount of token_out
+    /// * `max_slippage` - The maximum acceptable slippage, defaults to 0.005 (0.5%)
+    /// * `uniswap_quoter` - Optional address of the Uniswap v3 quoter to contact, default is 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use std::str::FromStr;
+    /// use clarity::Address;
+    /// use clarity::Uint256;
+    /// use web30::amm::*;
+    /// use web30::client::Web3;
+    /// let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    /// let result = web3.get_uniswap_price_with_slippage(
+    ///     Address::parse_and_validate("0x1111111111111111111111111111111111111111").unwrap(),
+    ///     *WETH_CONTRACT_ADDRESS,
+    ///     *DAI_CONTRACT_ADDRESS,
+    ///     Some(500u16.into()), // the 0.05% fee pool
+    ///     Uint256::from_str("1000000000000000000"), // 1 WETH in
+    ///     Some(0.05f64), // 5% max slippage
+    ///     Some(*UNISWAP_QUOTER_ADDRESS),
+    /// );
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_uniswap_price_with_slippage(
+        &self,
+        caller_address: Address, // An arbitrary ethereum address with some amount of ether
+        token_in: Address,       // The token held
+        token_out: Address,      // The desired token
+        fee_uint24: Option<Uint256>, // Actually a uint24 on the callee side
+        amount: Uint256,         // The amount of tokens offered up
+        max_slippage: Option<f64>, // The maximum amount of slippage to allow
+        uniswap_quoter: Option<Address>, // The default quoter will be used if none is provided
+    ) -> Result<Uint256, Web3Error> {
+        let max_slippage = max_slippage.unwrap_or(0.005f64);
+        // Get the current sqrt price from the pool with some price wiggle room
+        let sqrt_price_limit = self
+            .get_slippage_sqrt_price(
+                token_in,
+                token_out,
+                fee_uint24.clone(),
+                max_slippage,
+                caller_address,
+            )
+            .await?;
+
+        self.get_uniswap_price(
+            caller_address,
+            token_in,
+            token_out,
+            fee_uint24,
+            amount,
+            Some(sqrt_price_limit),
+            uniswap_quoter,
+        )
+        .await
+    }
+
+    /// A highly-flexible price checker simulating a Uniswap v3 swap amount of `token_out` obtainable for `amount` of `token_in`
     /// Returns an error if the pool's liquidity is too low, resulting in a swap returning less than what the
     /// sqrt_price_limit_x96_uint160 implies should be traded
+    /// This method simulates a transaction using the Uniswap Quoter, it does not swap any funds
     ///
     /// # Arguments
     ///
-    /// * `caller_address` - The ethereum address making the request
     /// * `token_in` - The address of an ERC20 token to offer up
     /// * `token_out` - The address of an ERC20 token to receive
     /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
     ///    Defaults to the pool fee of 0.3%
     ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
     /// * `sqrt_price_limit_x96_uint160` - Optional square root price limit, see methods below for more information
-    /// * `uniswap_quoter` - Optional address of the Uniswap v3 quoter to contact
+    /// * `caller_address` - The ethereum address simulating the swap
+    /// * `uniswap_quoter` - Optional address of the Uniswap v3 quoter to contact, default is 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6
     ///
     /// # Examples
     /// ```rust,ignore
@@ -71,11 +182,11 @@ impl Web3 {
     #[allow(clippy::too_many_arguments)]
     pub async fn get_uniswap_price(
         &self,
-        caller_address: Address,
-        token_in: Address,                             // The token held
-        token_out: Address,                            // The desired token
-        fee_uint24: Option<Uint256>,                   // Actually a uint24 on the callee side
-        amount: Uint256,                               // The amount of tokens offered up
+        caller_address: Address, // An arbitrary ethereum address with some amount of ether
+        token_in: Address,       // The token held
+        token_out: Address,      // The desired token
+        fee_uint24: Option<Uint256>, // Actually a uint24 on the callee side
+        amount: Uint256,         // The amount of tokens offered up
         sqrt_price_limit_x96_uint160: Option<Uint256>, // Actually a uint160 on the callee side
         uniswap_quoter: Option<Address>, // The default quoter will be used if none is provided
     ) -> Result<Uint256, Web3Error> {
@@ -153,7 +264,78 @@ impl Web3 {
         Ok(amount_out)
     }
 
-    /// Performs an exact input single pool swap via Uniswap v3, exchanging `amount` of `token_in` for `token_out`
+    /// An easy to use swap method for Uniswap v3, exchanging `amount` of `token_in` for `token_out`, accounting for slippage
+    /// If max_slippage is None, the default of 0.5% will be used
+    /// This method calls exactInputSingle on the Uniswap v3 Router
+    ///
+    /// # Arguments
+    /// * `eth_private_key` - The private key of the holder of `token_in` who will receive `token_out`
+    /// * `token_in` - The address of the ERC20 token to exchange for `token_out`
+    /// * `token_out` - The address of the ERC20 token to receive
+    /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
+    ///    Defaults to the medium pool fee of 0.3%
+    ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
+    /// * `amount` - The amount of `token_in` to exchange for as much `token_out` as possible
+    /// * `deadline` - Optional deadline to the swap before it is cancelled, 10 minutes if None
+    /// * `max_slippage` - Optional maximum slippage amount for the swap, defaults to 0.005 (0.5%) if None
+    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
+    /// * `options` - Optional arguments for the Transaction, see send_transaction()
+    /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
+    #[allow(clippy::too_many_arguments)]
+    pub async fn swap_uniswap_with_slippage(
+        &self,
+        eth_private_key: PrivateKey,        // The address swapping tokens
+        token_in: Address,                  // The token held
+        token_out: Address,                 // The desired token
+        fee_uint24: Option<Uint256>,        // Actually a uint24 on the callee side
+        amount: Uint256,                    // The amount of tokens offered up
+        deadline: Option<Uint256>,          // A deadline by which the swap must happen
+        max_slippage: Option<f64>,          // The maximum amount of slippage to tolerate
+        uniswap_router: Option<Address>,    // The default router will be used if None is provided
+        options: Option<Vec<SendTxOption>>, // Options for send_transaction
+        wait_timeout: Option<Duration>,
+    ) -> Result<Uint256, Web3Error> {
+        let max_slippage = max_slippage.unwrap_or(0.005f64);
+        let fee = fee_uint24.unwrap_or_else(|| 3000u16.into());
+        let caller_address = eth_private_key.to_address();
+        let sqrt_price_limit = self
+            .get_slippage_sqrt_price(
+                token_in,
+                token_out,
+                Some(fee.clone()),
+                max_slippage,
+                caller_address,
+            )
+            .await?;
+        let min_amount_out = self
+            .get_sensible_amount_out_from_sqrt_price(
+                Some(sqrt_price_limit.clone()),
+                amount.clone(),
+                token_in,
+                token_out,
+                fee.clone(),
+                caller_address,
+            )
+            .await?;
+
+        self.swap_uniswap(
+            eth_private_key,
+            token_in,
+            token_out,
+            Some(fee),
+            amount,
+            deadline,
+            Some(min_amount_out),
+            Some(sqrt_price_limit),
+            uniswap_router,
+            options,
+            wait_timeout,
+        )
+        .await
+    }
+
+    /// A highly-flexible swap method for Uniswap v3, exchanging, exchanging `amount` of `token_in` for `token_out`
+    /// This method calls exactInputSingle on the Uniswap v3 Router
     ///
     /// # Arguments
     /// * `eth_private_key` - The private key of the holder of `token_in` who will receive `token_out`
@@ -329,7 +511,80 @@ impl Web3 {
         Ok(txid)
     }
 
-    /// Performs an exact input single pool swap via Uniswap v3, exchanging `amount` of eth directly for `token_out`
+    /// An easy to use swap method for Uniswap v3, exchanging `amount` of eth for `token_out`, accounting for slippage
+    /// If max_slippage is None, the default of 0.5% will be used
+    /// This method calls exactInputSingle on the Uniswap v3 Router
+    ///
+    /// IMPORTANT: normally Uniswap v3 only works with ERC20 tokens, but in the case of transfers involving wETH, they will
+    /// wrap the ETH for you before the swap. Using this method you will be charged the additional gas required to wrap
+    /// the input `amount` of ETH. If you will be calling this method multiple times, it is likely cheaper to wrap a lot of ETH
+    /// and calling swap_uniswap_with_slippage() instead.
+    ///
+    /// # Arguments
+    /// * `eth_private_key` - The private key of the holder of `token_in` who will receive `token_out`
+    /// * `token_out` - The address of the ERC20 token to receive
+    /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
+    ///    Defaults to the medium pool fee of 0.3%
+    ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
+    /// * `amount` - The amount of `token_in` to exchange for as much `token_out` as possible
+    /// * `deadline` - Optional deadline to the swap before it is cancelled, 10 minutes if None
+    /// * `max_slippage` - Optional maximum slippage amount for the swap, defaults to 0.005 (0.5%) if None
+    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
+    /// * `options` - Optional arguments for the Transaction, see send_transaction()
+    /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
+    #[allow(clippy::too_many_arguments)]
+    pub async fn swap_uniswap_eth_in_with_slippage(
+        &self,
+        eth_private_key: PrivateKey,        // The address swapping tokens
+        token_out: Address,                 // The desired token
+        fee_uint24: Option<Uint256>,        // Actually a uint24 on the callee side
+        amount: Uint256,                    // The amount of tokens offered up
+        deadline: Option<Uint256>,          // A deadline by which the swap must happen
+        max_slippage: Option<f64>,          // The maximum amount of slippage to tolerate
+        uniswap_router: Option<Address>,    // The default router will be used if None is provided
+        options: Option<Vec<SendTxOption>>, // Options for send_transaction
+        wait_timeout: Option<Duration>,
+    ) -> Result<Uint256, Web3Error> {
+        let max_slippage = max_slippage.unwrap_or(0.005f64);
+        let fee = fee_uint24.unwrap_or_else(|| 3000u16.into());
+        let caller_address = eth_private_key.to_address();
+        let sqrt_price_limit = self
+            .get_slippage_sqrt_price(
+                *WETH_CONTRACT_ADDRESS,
+                token_out,
+                Some(fee.clone()),
+                max_slippage,
+                caller_address,
+            )
+            .await?;
+        let min_amount_out = self
+            .get_sensible_amount_out_from_sqrt_price(
+                Some(sqrt_price_limit.clone()),
+                amount.clone(),
+                *WETH_CONTRACT_ADDRESS,
+                token_out,
+                fee.clone(),
+                caller_address,
+            )
+            .await?;
+
+        self.swap_uniswap_eth_in(
+            eth_private_key,
+            token_out,
+            Some(fee),
+            amount,
+            deadline,
+            Some(min_amount_out),
+            Some(sqrt_price_limit),
+            uniswap_router,
+            options,
+            wait_timeout,
+        )
+        .await
+    }
+
+    /// A highly-flexible swap method for Uniswap v3, exchanging, exchanging `amount` of eth directly for `token_out`
+    /// This method calls exactInputSingle on the Uniswap v3 Router
     ///
     /// IMPORTANT: normally Uniswap v3 only works with ERC20 tokens, but in the case of transfers involving wETH, they will
     /// wrap the ETH for you before the swap. Using this method you will be charged the additional gas required to wrap
@@ -490,7 +745,7 @@ impl Web3 {
     /// default or given Uniswap Factory contract
     pub async fn get_uniswap_pool_address(
         &self,
-        caller_address: Address, // an unimportant ethereum address with any amount of ether
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
         token_a: Address,        // one of the tokens in the pool
         token_b: Address,        // the other token in the pool
         fee_uint24: Option<Uint256>, // The 0.3% fee pool will be used if not specified
@@ -519,7 +774,7 @@ impl Web3 {
     /// Identifies token0 and token1 in a Uniswap v3 pool, which all stored data is based off of
     pub async fn get_uniswap_pool_tokens(
         &self,
-        caller_address: Address, // an unimportant ethereum address with any amount of ether
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
         pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
     ) -> Result<(Address, Address), Web3Error> {
         let token0 = self
@@ -534,7 +789,7 @@ impl Web3 {
     /// Returns either token0 or token1 from a Uniswap v3 pool, depending on input
     pub async fn get_uniswap_pool_token(
         &self,
-        caller_address: Address, // an unimportant ethereum address with any amount of ether
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
         pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
         get_token_0: bool,       // The token to get, true for token0 and false for token1
     ) -> Result<Address, Web3Error> {
@@ -563,7 +818,7 @@ impl Web3 {
     pub async fn get_uniswap_pool_slot0(
         &self,
         pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
-        caller_address: Address, // an unimportant ethereum address with any amount of ether
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
     ) -> Result<Vec<u8>, Web3Error> {
         let payload = encode_call("slot0()", &[]).unwrap();
         let slot0_result = self
@@ -580,7 +835,7 @@ impl Web3 {
     /// Note that this value will differ slightly from the swap price due to the pool fee
     pub async fn get_uniswap_sqrt_price(
         &self,
-        caller_address: Address, // an unimportant ethereum address with any amount of ether
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
         pool_address: Address,   // The address of the Uniswap pool contract
     ) -> Result<Uint256, Web3Error> {
         let slot0_result = self
@@ -592,6 +847,30 @@ impl Web3 {
         let sqrt_price = Uint256::from_bytes_be(&slot0_result[32 - 20..32]);
 
         Ok(sqrt_price)
+    }
+    /// Generates a Uniswap v3 sqrtPriceX96 to allow a maximum amount of slippage on a trade by querying the specified pool
+    /// If fee is None then the 0.3% fee pool will be used
+    pub async fn get_slippage_sqrt_price(
+        &self,
+        token_in: Address,       // the held token
+        token_out: Address,      // the desired token
+        fee: Option<Uint256>, // the fee of the Uniswap v3 pool in hundredths of basis points (e.g. 0.05% -> 500)
+        slippage: f64,        // the amount of slippage to tolerate (e.g. 0.05 = 5%)
+        caller_address: Address, // an arbitrary ethereum address with some amount of Ether
+    ) -> Result<Uint256, Web3Error> {
+        let fee = fee.unwrap_or_else(|| 3000u16.into());
+        let pool_addr = self
+            .get_uniswap_pool_address(caller_address, token_in, token_out, Some(fee), None)
+            .await?;
+        let token0 = self
+            .get_uniswap_pool_token(caller_address, pool_addr, true)
+            .await?;
+        let zero_for_one = token0 == token_in;
+        let sqrt_price = self
+            .get_uniswap_sqrt_price(pool_addr, caller_address)
+            .await?;
+
+        Ok(scale_uniswap_sqrt_price(sqrt_price, slippage, zero_for_one))
     }
 
     /// Returns a sensible swap amount_out for any input sqrt_price_limit, defined as the minimum swap
@@ -606,7 +885,7 @@ impl Web3 {
         token_in: Address, // the held token
         token_out: Address, // the desired token
         fee: Uint256, // the fee value of the Uniswap pool, in hundredths of basis points (e.g. 0.05% -> 500)
-        caller_address: Address, // an unimportant ethereum address with any amount of ether
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
     ) -> Result<Uint256, Web3Error> {
         // Compute a sensible default from sqrt price limit
         if sqrt_price_limit.is_some() {
@@ -907,7 +1186,7 @@ fn uniswap_sqrt_price_test() {
 async fn attempt_swap_with_limit(
     web3: &Web3,
     i: i32,                            // an identifier for logs
-    caller_address: Address,           // an unimportant ethereum address with some amount of ether
+    caller_address: Address,           // an arbitrary ethereum address with some amount of ether
     token_in: Address,                 // the held token
     token_out: Address,                // the desired token
     sqrt_price_no_slippage: Uint256,   // the current sqrt price stored in the uniswap pool
