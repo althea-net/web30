@@ -65,13 +65,14 @@ impl Web3 {
                     None,
                 )
                 .await;
+            trace!("Price with slippage {} and fee {}: {:?}", max_slippage, fee, swap_res);
             if swap_res.is_ok() {
                 return Ok(swap_res.unwrap());
             }
         }
 
         Err(Web3Error::BadResponse(
-            "No such pool or liquidity too low".to_string(),
+            "Unable to fetch price from standard pools, are you sure a pool with enough liquidity exists?".to_string(),
         ))
     }
 
@@ -223,7 +224,7 @@ impl Web3 {
         let result = self
             .simulate_transaction(quoter, 0u8.into(), payload, caller_address, None)
             .await?;
-        debug!("result is {:?}", result);
+        trace!("result is {:?}", result);
 
         // Compute a sensible minimum amount out to determine if too little liquidity exists for the swap
         let amount_out_min: Uint256 = self
@@ -408,7 +409,9 @@ impl Web3 {
         let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
-            None => self.eth_get_latest_block().await.unwrap().timestamp + (10u64 * 60u64).into(),
+            None => {
+                self.eth_get_latest_block().await?.timestamp + (10u64 * 60u64).into()
+            },
             Some(val) => val,
         };
 
@@ -485,7 +488,7 @@ impl Web3 {
             }
         }
 
-        debug!("payload is  {:?}", payload);
+        trace!("payload is  {:?}", payload);
         let txid = self
             .send_transaction(
                 router,
@@ -758,9 +761,8 @@ impl Web3 {
 
         let pool_result = self
             .simulate_transaction(factory, 0u8.into(), payload, caller_address, None)
-            .await;
-        debug!("pool result is {:?}", pool_result);
-        let pool_result = pool_result.unwrap();
+            .await?;
+        trace!("pool result is {:X?}", pool_result);
         let zero_result = vec![0; 32];
         if pool_result == zero_result {
             return Err(Web3Error::BadResponse("No such Uniswap pool".to_string()));
@@ -798,7 +800,7 @@ impl Web3 {
         let token_result = self
             .simulate_transaction(pool_addr, 0u8.into(), payload, caller_address, None)
             .await?;
-        debug!("token_result: {:?}", token_result);
+        trace!("token_result: {:X?}", token_result);
         let result_len = token_result.len();
         let token_bytes: &[u8] = &token_result[result_len - 20..result_len];
 
@@ -824,7 +826,7 @@ impl Web3 {
         let slot0_result = self
             .simulate_transaction(pool_addr, 0u8.into(), payload, caller_address, None)
             .await?;
-        debug!("slot0_result: {:?}", slot0_result);
+        trace!("slot0_result: {:X?}", slot0_result);
 
         Ok(slot0_result)
     }
@@ -841,11 +843,14 @@ impl Web3 {
         let slot0_result = self
             .get_uniswap_pool_slot0(pool_address, caller_address)
             .await?;
-        debug!("slot0_result: {:?}", slot0_result);
+        if slot0_result.len() == 0 {
+            return Err(Web3Error::BadResponse("Zero slot0 response".to_string()));
+        }
 
         // we only want the first value: sqrtPriceX96, a uint160 which occupies 20 bytes but is put at the right of a 32 byte buffer
         let sqrt_price = Uint256::from_bytes_be(&slot0_result[32 - 20..32]);
 
+        trace!("parsed sqrt_price {:X?}", sqrt_price);
         Ok(sqrt_price)
     }
     /// Generates a Uniswap v3 sqrtPriceX96 to allow a maximum amount of slippage on a trade by querying the specified pool
@@ -867,7 +872,7 @@ impl Web3 {
             .await?;
         let zero_for_one = token0 == token_in;
         let sqrt_price = self
-            .get_uniswap_sqrt_price(pool_addr, caller_address)
+            .get_uniswap_sqrt_price(caller_address, pool_addr)
             .await?;
 
         Ok(scale_uniswap_sqrt_price(sqrt_price, slippage, zero_for_one))
@@ -909,7 +914,7 @@ impl Web3 {
             };
             let amt = amount.to_string().parse::<f64>().unwrap();
             let sensible_amount_out = sensible_spot_price * amt;
-            let sensible_amount_out = sensible_amount_out.to_string().parse::<Uint256>().unwrap();
+            let sensible_amount_out = sensible_amount_out.floor().to_string().parse::<Uint256>().unwrap();
             return Ok(sensible_amount_out);
         }
 
@@ -1536,5 +1541,35 @@ fn swap_hardhat_eth_in_test() {
             "Effectively swapped {} eth for {} dai",
             eth_lost, dai_gained
         );
+    });
+}
+
+#[test]
+fn test_weth_price_fetching() {
+    use actix::System;
+    use env_logger::{Builder, Env};
+    use std::time::Duration;
+    use clarity::Address;
+    Builder::from_env(Env::default().default_filter_or("debug")).init(); // Change to debug for logs
+
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
+    let caller_address = Address::parse_and_validate("0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c").unwrap();
+    let ten_e18: Uint256 = 1_000_000_000_000_000_000u64.into();
+    let ten_e6: Uint256 = 1_000_000u64.into();
+
+    let weth = *WETH_CONTRACT_ADDRESS;
+    let dai = *DAI_CONTRACT_ADDRESS;
+    let pstake = Address::parse_and_validate("0xfB5c6815cA3AC72Ce9F5006869AE67f18bF77006").unwrap();
+    let nym = Address::parse_and_validate("0x525A8F6F3Ba4752868cde25164382BfbaE3990e1").unwrap();
+    let slippage = Some(0.05);
+
+    runner.block_on(async move {
+        let pstake_price = web3.get_uniswap_price_with_retries(pstake, weth, ten_e18.clone(), slippage, caller_address).await;
+        info!("PSTAKE: {:?}", pstake_price);
+        let nym_price    = web3.get_uniswap_price_with_retries(nym, weth, ten_e18.clone(), slippage, caller_address).await;
+        info!("NYM: {:?}", nym_price);
+        let dai_price    = web3.get_uniswap_price_with_retries(dai, weth, ten_e18.clone(), slippage, caller_address).await;
+        info!("DAI: {:?}", dai_price);
     });
 }
