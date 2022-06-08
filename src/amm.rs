@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 // Performs interactions with AMMs (Automated Market Makers) on ethereum
 use crate::{client::Web3, jsonrpc::error::Web3Error, types::SendTxOption};
 use clarity::utils::display_uint256_as_address;
@@ -10,6 +8,7 @@ use clarity::{
 };
 use num::traits::Inv;
 use num::BigUint;
+use std::time::Duration;
 use tokio::time::timeout as future_timeout;
 
 /// Default padding multiplied to uniswap exchange gas limit values due to variablity of gas limit values
@@ -18,13 +17,17 @@ pub const DEFAULT_GAS_LIMIT_MULT: f32 = 1.2;
 
 lazy_static! {
     /// Uniswap V3's Quoter interface for checking current swap prices, from prod Ethereum
-    pub static ref UNISWAP_QUOTER_ADDRESS: Address =
+    pub static ref UNISWAP_V3_QUOTER_ADDRESS: Address =
         Address::parse_and_validate("0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6").unwrap();
     /// Uniswap V3's Router interface for swapping tokens, from prod Ethereum
-    pub static ref UNISWAP_ROUTER_ADDRESS: Address =
+    pub static ref UNISWAP_V3_ROUTER_ADDRESS: Address =
         Address::parse_and_validate("0xE592427A0AEce92De3Edee1F18E0157C05861564").unwrap();
-    pub static ref UNISWAP_FACTORY_ADDRESS: Address =
+    /// Uniswap V3's Factory interface for locating and interacting with pools
+    pub static ref UNISWAP_V3_FACTORY_ADDRESS: Address =
         Address::parse_and_validate("0x1F98431c8aD98523631AE4a59f267346ea31F984").unwrap();
+    /// Uniswap V2's Router02 interface for swapping tokens, from prod Ethereum
+    pub static ref UNISWAP_V2_ROUTER_ADDRESS: Address =
+        Address::parse_and_validate("0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D").unwrap();
     /// The DAI V2 Token's address, on prod Ethereum
     pub static ref DAI_CONTRACT_ADDRESS: Address =
         Address::parse_and_validate("0x6B175474E89094C44Da98b954EedeAC495271d0F").unwrap();
@@ -39,33 +42,142 @@ lazy_static! {
 }
 
 impl Web3 {
+    /// Queries the Uniswap V2 Router02 to get the amount of `token_out` obtainable for `amount` of `token_in`
+    /// This method will not swap any funds
+    ///
+    /// # Arguments
+    ///
+    /// * `caller_address` - The ethereum address simulating the swap
+    /// * `token_in` - The address of an ERC20 token to offer up
+    /// * `token_out` - The address of an ERC20 token to receive
+    /// * `amount` - the amount of token_in to swap for some amount of token_out
+    /// * `uniswap_router` - Optional address of the Uniswap v2 Router02 to contact, default is 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use std::str::FromStr;
+    /// use clarity::Address;
+    /// use clarity::Uint256;
+    /// use web30::amm::*;
+    /// use web30::client::Web3;
+    /// let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    /// let result = web3.get_uniswap_v2_price(
+    ///     Address::parse_and_validate("0x1111111111111111111111111111111111111111").unwrap(),
+    ///     *WETH_CONTRACT_ADDRESS,
+    ///     *DAI_CONTRACT_ADDRESS,
+    ///     Uint256::from_str("1000000000000000000"), // 1 WETH in
+    ///     Some(*UNISWAP_V3_ROUTER_ADDRESS),
+    /// );
+    /// ```
+    pub async fn get_uniswap_v2_price(
+        &self,
+        caller_address: Address, // an arbitrary ethereum address with some amount of Ether
+        token_in: Address,       // the held token
+        token_out: Address,      // the desired token
+        amount: Uint256,         // the amount of token_in to swap
+        uniswap_router: Option<Address>, // Optional address of the Uniswap v2 router to contact, if None the default will be used
+    ) -> Result<Uint256, Web3Error> {
+        let router = uniswap_router.unwrap_or(*UNISWAP_V2_ROUTER_ADDRESS);
+
+        let tokens: [Token; 2] = [
+            Token::Uint(amount.clone()),
+            vec![token_in, token_out].into(),
+        ];
+
+        debug!("tokens is  {:?}", tokens);
+        let payload = encode_call("getAmountsOut(uint256,address[])", &tokens)?;
+        trace!("payload is {:02X?}", payload);
+        let amounts_bytes = self
+            .simulate_transaction(router, 0u8.into(), payload, caller_address, None)
+            .await?;
+        trace!("getAmountsOut response is {:02X?}", amounts_bytes);
+
+        // Convert Some(Vec<u8>) -> Some(Vec<Uint256>)
+        if amounts_bytes.len() % 32 != 0 || amounts_bytes.len() <= 64 {
+            return Err(Web3Error::BadResponse(format!(
+                "Unexpected response byte length: {}",
+                amounts_bytes.len()
+            )));
+        }
+        // Throw away the first two values (type code and response length), then parse Uint256's from each 32 byte chunk
+        let amounts = amounts_bytes[64..]
+            .chunks(32)
+            .map(Uint256::from_bytes_be)
+            .collect::<Vec<Uint256>>();
+        debug!("Got amounts from response: {:?}", amounts);
+        // The last amount is the output
+        if amounts.len() != 2 {
+            return Err(Web3Error::BadResponse(format!(
+                "Unexpected swap path, should only have 2 amounts: {:?}",
+                amounts
+            )));
+        }
+        // The remaining amounts are [amount_in, amount_out]
+        Ok(amounts.last().unwrap().clone())
+    }
+
     /// Checks all the standard Uniswap v3 fee pools to get the amount of `token_out` obtainable for `amount` of `token_in`, accounting for slippage
     /// A pool with low liquidity will have its price rejected
     /// This method is particularly useful for newer tokens which may not have a 0.3% fee pool in Uniswap v3
     /// The queried fee levels are 0.3%, 0.05%, 1%, and 0.01%
     /// This method repeatedly simulates transactions using the Uniswap Quoter, it does not swap any funds
-    pub async fn get_uniswap_price_with_retries(
+    ///
+    /// # Arguments
+    ///
+    /// * `caller_address` - The ethereum address simulating the swap
+    /// * `token_in` - The address of an ERC20 token to offer up
+    /// * `token_out` - The address of an ERC20 token to receive
+    /// * `amount` - the amount of token_in to swap for some amount of token_out
+    /// * `max_slippage` - The maximum acceptable slippage, defaults to 0.005 (0.5%)
+    /// * `uniswap_quoter` - Optional Uniswap v3 Quoter contract to use, default is 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6
+    ///
+    /// # Examples
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use std::str::FromStr;
+    /// use clarity::Address;
+    /// use clarity::Uint256;
+    /// use web30::amm::*;
+    /// use web30::client::Web3;
+    /// let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    /// let result = web3.get_uniswap_price_with_retries(
+    ///     Address::parse_and_validate("0x1111111111111111111111111111111111111111").unwrap(),
+    ///     *WETH_CONTRACT_ADDRESS,
+    ///     *DAI_CONTRACT_ADDRESS,
+    ///     Uint256::from_str("1000000000000000000"), // 1 WETH in
+    ///     Some(0.05f64), // 5% max slippage
+    ///     Some(*UNISWAP_V3_QUOTER_ADDRESS),
+    /// );
+    /// ```
+    pub async fn get_uniswap_v3_price_with_retries(
         &self,
-        token_in: Address,         // the held token
-        token_out: Address,        // the desired token
-        amount: Uint256,           // the amount of token_in to swap
+        caller_address: Address, // an arbitrary ethereum address with some amount of Ether
+        token_in: Address,       // the held token
+        token_out: Address,      // the desired token
+        amount: Uint256,         // the amount of token_in to swap
         max_slippage: Option<f64>, // optional maximum slippage to tolerate, defaults to 0.5%
-        caller_address: Address,   // an arbitrary ethereum address with some amount of Ether
+        uniswap_quoter: Option<Address>, // optional uniswap v3 quoter to contact, default is 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6
     ) -> Result<Uint256, Web3Error> {
         let max_slippage = max_slippage.unwrap_or(0.005f64);
         for fee in &*UNISWAP_STANDARD_POOL_FEES {
             let swap_res = self
-                .get_uniswap_price_with_slippage(
+                .get_uniswap_v3_price_with_slippage(
                     caller_address,
                     token_in,
                     token_out,
                     Some(fee.clone()),
                     amount.clone(),
                     Some(max_slippage),
-                    None,
+                    uniswap_quoter,
                 )
                 .await;
-            trace!("Price with slippage {} and fee {}: {:?}", max_slippage, fee, swap_res);
+            trace!(
+                "Price with slippage {} and fee {}: {:?}",
+                max_slippage,
+                fee,
+                swap_res
+            );
             if swap_res.is_ok() {
                 return Ok(swap_res.unwrap());
             }
@@ -107,11 +219,11 @@ impl Web3 {
     ///     Some(500u16.into()), // the 0.05% fee pool
     ///     Uint256::from_str("1000000000000000000"), // 1 WETH in
     ///     Some(0.05f64), // 5% max slippage
-    ///     Some(*UNISWAP_QUOTER_ADDRESS),
+    ///     Some(*UNISWAP_V3_QUOTER_ADDRESS),
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
-    pub async fn get_uniswap_price_with_slippage(
+    pub async fn get_uniswap_v3_price_with_slippage(
         &self,
         caller_address: Address, // An arbitrary ethereum address with some amount of ether
         token_in: Address,       // The token held
@@ -119,21 +231,21 @@ impl Web3 {
         fee_uint24: Option<Uint256>, // Actually a uint24 on the callee side
         amount: Uint256,         // The amount of tokens offered up
         max_slippage: Option<f64>, // The maximum amount of slippage to allow
-        uniswap_quoter: Option<Address>, // The default quoter will be used if none is provided
+        uniswap_quoter: Option<Address>, // The default v3 quoter will be used if none is provided
     ) -> Result<Uint256, Web3Error> {
         let max_slippage = max_slippage.unwrap_or(0.005f64);
         // Get the current sqrt price from the pool with some price wiggle room
         let sqrt_price_limit = self
-            .get_slippage_sqrt_price(
+            .get_v3_slippage_sqrt_price(
+                caller_address,
                 token_in,
                 token_out,
                 fee_uint24.clone(),
                 max_slippage,
-                caller_address,
             )
             .await?;
 
-        self.get_uniswap_price(
+        self.get_uniswap_v3_price(
             caller_address,
             token_in,
             token_out,
@@ -152,13 +264,13 @@ impl Web3 {
     ///
     /// # Arguments
     ///
+    /// * `caller_address` - The ethereum address simulating the swap
     /// * `token_in` - The address of an ERC20 token to offer up
     /// * `token_out` - The address of an ERC20 token to receive
     /// * `fee_uint24` - Optional fee level of the `token_in`<->`token_out` pool to query - limited to uint24 in size.
     ///    Defaults to the pool fee of 0.3%
     ///    The suggested pools are 0.3% (3000), 0.05% (500), 1% (10000), and 0.01% (100) but more may be added permissionlessly
     /// * `sqrt_price_limit_x96_uint160` - Optional square root price limit, see methods below for more information
-    /// * `caller_address` - The ethereum address simulating the swap
     /// * `uniswap_quoter` - Optional address of the Uniswap v3 quoter to contact, default is 0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6
     ///
     /// # Examples
@@ -177,11 +289,11 @@ impl Web3 {
     ///     Some(500u16.into()),
     ///     Uint256::from_str("1000000000000000000"), // 1 WETH
     ///     Some(uniswap_sqrt_price(2023u16.into(), 1u8.into())), // Sample 1 Eth ->  2k Dai swap rate,
-    ///     Some(*UNISWAP_QUOTER_ADDRESS),
+    ///     Some(*UNISWAP_V3_QUOTER_ADDRESS),
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
-    pub async fn get_uniswap_price(
+    pub async fn get_uniswap_v3_price(
         &self,
         caller_address: Address, // An arbitrary ethereum address with some amount of ether
         token_in: Address,       // The token held
@@ -189,9 +301,9 @@ impl Web3 {
         fee_uint24: Option<Uint256>, // Actually a uint24 on the callee side
         amount: Uint256,         // The amount of tokens offered up
         sqrt_price_limit_x96_uint160: Option<Uint256>, // Actually a uint160 on the callee side
-        uniswap_quoter: Option<Address>, // The default quoter will be used if none is provided
+        uniswap_quoter: Option<Address>, // The default v3 quoter will be used if none is provided
     ) -> Result<Uint256, Web3Error> {
-        let quoter = uniswap_quoter.unwrap_or(*UNISWAP_QUOTER_ADDRESS);
+        let quoter = uniswap_quoter.unwrap_or(*UNISWAP_V3_QUOTER_ADDRESS);
 
         let fee_uint24 = fee_uint24.unwrap_or_else(|| 3000u32.into());
         if bad_fee(&fee_uint24) {
@@ -228,17 +340,17 @@ impl Web3 {
 
         // Compute a sensible minimum amount out to determine if too little liquidity exists for the swap
         let amount_out_min: Uint256 = self
-            .get_sensible_amount_out_from_sqrt_price(
+            .get_sensible_amount_out_from_v3_sqrt_price(
+                caller_address,
                 sqrt_price_limit_x96_uint160,
                 amount.clone(),
                 token_in,
                 token_out,
                 fee_uint24.clone(),
-                caller_address,
             )
             .await?;
 
-        let decoded_sqrt_price = decode_uniswap_sqrt_price(sqrt_price_limit_x96.clone());
+        let decoded_sqrt_price = decode_uniswap_v3_sqrt_price(sqrt_price_limit_x96.clone());
 
         let amount_out = Uint256::from_bytes_be(match result.get(0..32) {
             Some(val) => val,
@@ -279,11 +391,11 @@ impl Web3 {
     /// * `amount` - The amount of `token_in` to exchange for as much `token_out` as possible
     /// * `deadline` - Optional deadline to the swap before it is cancelled, 10 minutes if None
     /// * `max_slippage` - Optional maximum slippage amount for the swap, defaults to 0.005 (0.5%) if None
-    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
+    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact, default is 0xE592427A0AEce92De3Edee1F18E0157C05861564
     /// * `options` - Optional arguments for the Transaction, see send_transaction()
     /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
     #[allow(clippy::too_many_arguments)]
-    pub async fn swap_uniswap_with_slippage(
+    pub async fn swap_uniswap_v3_with_slippage(
         &self,
         eth_private_key: PrivateKey,        // The address swapping tokens
         token_in: Address,                  // The token held
@@ -292,7 +404,7 @@ impl Web3 {
         amount: Uint256,                    // The amount of tokens offered up
         deadline: Option<Uint256>,          // A deadline by which the swap must happen
         max_slippage: Option<f64>,          // The maximum amount of slippage to tolerate
-        uniswap_router: Option<Address>,    // The default router will be used if None is provided
+        uniswap_router: Option<Address>, // The default v3 router will be used if None is provided
         options: Option<Vec<SendTxOption>>, // Options for send_transaction
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
@@ -300,26 +412,26 @@ impl Web3 {
         let fee = fee_uint24.unwrap_or_else(|| 3000u16.into());
         let caller_address = eth_private_key.to_address();
         let sqrt_price_limit = self
-            .get_slippage_sqrt_price(
+            .get_v3_slippage_sqrt_price(
+                caller_address,
                 token_in,
                 token_out,
                 Some(fee.clone()),
                 max_slippage,
-                caller_address,
             )
             .await?;
         let min_amount_out = self
-            .get_sensible_amount_out_from_sqrt_price(
+            .get_sensible_amount_out_from_v3_sqrt_price(
+                caller_address,
                 Some(sqrt_price_limit.clone()),
                 amount.clone(),
                 token_in,
                 token_out,
                 fee.clone(),
-                caller_address,
             )
             .await?;
 
-        self.swap_uniswap(
+        self.swap_uniswap_v3(
             eth_private_key,
             token_in,
             token_out,
@@ -350,7 +462,7 @@ impl Web3 {
     /// * `amount_out_min` - Optional minimum amount of `token_out` to receive or the swap is cancelled, ignored if None
     /// * `sqrt_price_limit_x96_64` - Optional square root price limit, ignored if None or 0.
     ///                               See the methods below for more information
-    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
+    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact, default is 0xE592427A0AEce92De3Edee1F18E0157C05861564
     /// * `options` - Optional arguments for the Transaction, see send_transaction()
     /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
     ///
@@ -361,7 +473,7 @@ impl Web3 {
     /// use web30::amm::*;
     /// use web30::client::Web3;
     /// let web3 = Web3::new("http://localhost:8545", Duration::from_secs(5));
-    /// let result = web3.swap_uniswap(
+    /// let result = web3.swap_uniswap_v3(
     ///     "0x1111111111111111111111111111111111111111111111111111111111111111".parse().unwrap(),
     ///     *WETH_CONTRACT_ADDRESS,
     ///     *DAI_CONTRACT_ADDRESS,
@@ -369,14 +481,14 @@ impl Web3 {
     ///     1000000000000000000u128.into(), // 1 WETH
     ///     Some(60u8.into()), // Wait 1 minute
     ///     Some(2020000000000000000000u128.into()), // Expect >= 2020 DAI
-    ///     Some(uniswap_sqrt_price_from_amounts(1u8.into(), 2000u16.into())), // Sample 1 Eth ->  2k Dai swap rate
-    ///     Some(*UNISWAP_ROUTER_ADDRESS),
+    ///     Some(uniswap_v3_sqrt_price_from_amounts(1u8.into(), 2000u16.into())), // Sample 1 Eth ->  2k Dai swap rate
+    ///     Some(*UNISWAP_V3_ROUTER_ADDRESS),
     ///     None,
     ///     None,
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
-    pub async fn swap_uniswap(
+    pub async fn swap_uniswap_v3(
         &self,
         eth_private_key: PrivateKey,     // The address swapping tokens
         token_in: Address,               // The token held
@@ -386,7 +498,7 @@ impl Web3 {
         deadline: Option<Uint256>,       // A deadline by which the swap must happen
         amount_out_min: Option<Uint256>, // The minimum output tokens to receive in a swap
         sqrt_price_limit_x96_uint160: Option<Uint256>, // Actually a uint160 on the callee side
-        uniswap_router: Option<Address>, // The default router will be used if None is provided
+        uniswap_router: Option<Address>, // The default v3 router will be used if None is provided
         options: Option<Vec<SendTxOption>>, // Options for send_transaction
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
@@ -406,25 +518,23 @@ impl Web3 {
         }
 
         let eth_address = eth_private_key.to_address();
-        let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
+        let router = uniswap_router.unwrap_or(*UNISWAP_V3_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
-            None => {
-                self.eth_get_latest_block().await?.timestamp + (10u64 * 60u64).into()
-            },
+            None => self.eth_get_latest_block().await?.timestamp + (10u64 * 60u64).into(),
             Some(val) => val,
         };
 
         let amount_out_min: Result<Uint256, Web3Error> = if let Some(amt) = amount_out_min {
             Ok(amt)
         } else {
-            self.get_sensible_amount_out_from_sqrt_price(
+            self.get_sensible_amount_out_from_v3_sqrt_price(
+                eth_address,
                 sqrt_price_limit_x96_uint160,
                 amount.clone(),
                 token_in,
                 token_out,
                 fee_uint24.clone(),
-                eth_address,
             )
             .await
         };
@@ -532,11 +642,11 @@ impl Web3 {
     /// * `amount` - The amount of `token_in` to exchange for as much `token_out` as possible
     /// * `deadline` - Optional deadline to the swap before it is cancelled, 10 minutes if None
     /// * `max_slippage` - Optional maximum slippage amount for the swap, defaults to 0.005 (0.5%) if None
-    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
+    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact, default is 0xE592427A0AEce92De3Edee1F18E0157C05861564
     /// * `options` - Optional arguments for the Transaction, see send_transaction()
     /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
     #[allow(clippy::too_many_arguments)]
-    pub async fn swap_uniswap_eth_in_with_slippage(
+    pub async fn swap_uniswap_v3_eth_in_with_slippage(
         &self,
         eth_private_key: PrivateKey,        // The address swapping tokens
         token_out: Address,                 // The desired token
@@ -544,7 +654,7 @@ impl Web3 {
         amount: Uint256,                    // The amount of tokens offered up
         deadline: Option<Uint256>,          // A deadline by which the swap must happen
         max_slippage: Option<f64>,          // The maximum amount of slippage to tolerate
-        uniswap_router: Option<Address>,    // The default router will be used if None is provided
+        uniswap_router: Option<Address>, // The default v3 router will be used if None is provided
         options: Option<Vec<SendTxOption>>, // Options for send_transaction
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
@@ -552,26 +662,26 @@ impl Web3 {
         let fee = fee_uint24.unwrap_or_else(|| 3000u16.into());
         let caller_address = eth_private_key.to_address();
         let sqrt_price_limit = self
-            .get_slippage_sqrt_price(
+            .get_v3_slippage_sqrt_price(
+                caller_address,
                 *WETH_CONTRACT_ADDRESS,
                 token_out,
                 Some(fee.clone()),
                 max_slippage,
-                caller_address,
             )
             .await?;
         let min_amount_out = self
-            .get_sensible_amount_out_from_sqrt_price(
+            .get_sensible_amount_out_from_v3_sqrt_price(
+                caller_address,
                 Some(sqrt_price_limit.clone()),
                 amount.clone(),
                 *WETH_CONTRACT_ADDRESS,
                 token_out,
                 fee.clone(),
-                caller_address,
             )
             .await?;
 
-        self.swap_uniswap_eth_in(
+        self.swap_uniswap_v3_eth_in(
             eth_private_key,
             token_out,
             Some(fee),
@@ -606,7 +716,7 @@ impl Web3 {
     ///                      if None and sqrt_price_limit_x96_64 is Some(_) then a sensible value will be computed
     /// * `sqrt_price_limit_x96_64` - Optional square root price limit, ignored if None or 0. See methods below
     ///                               for how to work with this value
-    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact
+    /// * `uniswap_router` - Optional address of the Uniswap v3 SwapRouter to contact, default is 0xE592427A0AEce92De3Edee1F18E0157C05861564
     /// * `options` - Optional arguments for the Transaction, see send_transaction()
     /// * `wait_timeout` - Set to Some(TIMEOUT) if you wish to wait for this tx to enter the chain before returning
     ///
@@ -617,21 +727,21 @@ impl Web3 {
     /// use web30::amm::*;
     /// use web30::client::Web3;
     /// let web3 = Web3::new("http://localhost:8545", Duration::from_secs(5));
-    /// let result = web3.swap_uniswap_eth_in(
+    /// let result = web3.swap_uniswap_v3_eth_in(
     ///     "0x1111111111111111111111111111111111111111111111111111111111111111".parse().unwrap(),
     ///     *DAI_CONTRACT_ADDRESS,
     ///     Some(500u16.into()),
     ///     1000000000000000000u128.into(), // 1 ETH
     ///     Some(60u8.into()), // Wait 1 minute
     ///     Some(2020000000000000000000u128.into()), // Expect >= 2020 DAI
-    ///     Some(uniswap_sqrt_price_from_amounts(1u8.into(), 2000u16.into())), // Sample 1 Eth ->  2k Dai swap rate
-    ///     Some(*UNISWAP_ROUTER_ADDRESS),
+    ///     Some(uniswap_v3_sqrt_price_from_amounts(1u8.into(), 2000u16.into())), // Sample 1 Eth ->  2k Dai swap rate
+    ///     Some(*UNISWAP_V3_ROUTER_ADDRESS),
     ///     None,
     ///     None,
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
-    pub async fn swap_uniswap_eth_in(
+    pub async fn swap_uniswap_v3_eth_in(
         &self,
         eth_private_key: PrivateKey,     // the address swapping tokens
         token_out: Address,              // the desired token
@@ -640,7 +750,7 @@ impl Web3 {
         deadline: Option<Uint256>,       // a deadline by which the swap must happen
         amount_out_min: Option<Uint256>, // the minimum output tokens to receive in a swap
         sqrt_price_limit_x96_uint160: Option<Uint256>, // actually a uint160 on the callee side
-        uniswap_router: Option<Address>, // the default router will be used if none is provided
+        uniswap_router: Option<Address>, // the default v3 router will be used if none is provided
         options: Option<Vec<SendTxOption>>, // options for send_transaction
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
@@ -661,7 +771,7 @@ impl Web3 {
         }
 
         let eth_address = eth_private_key.to_address();
-        let router = uniswap_router.unwrap_or(*UNISWAP_ROUTER_ADDRESS);
+        let router = uniswap_router.unwrap_or(*UNISWAP_V3_ROUTER_ADDRESS);
         let deadline = match deadline {
             // Default to latest block + 10 minutes
             None => self.eth_get_latest_block().await.unwrap().timestamp + (10u64 * 60u64).into(),
@@ -671,13 +781,13 @@ impl Web3 {
         let amount_out_min: Result<Uint256, Web3Error> = if let Some(amt) = amount_out_min {
             Ok(amt)
         } else {
-            self.get_sensible_amount_out_from_sqrt_price(
+            self.get_sensible_amount_out_from_v3_sqrt_price(
+                eth_address,
                 sqrt_price_limit_x96_uint160,
                 amount.clone(),
                 *WETH_CONTRACT_ADDRESS,
                 token_out,
                 fee_uint24.clone(),
-                eth_address,
             )
             .await
         };
@@ -746,15 +856,15 @@ impl Web3 {
 
     /// Requests the contract address for the Uniswap v3 pool determined by token_a, token_b, and fee_uint24 from the
     /// default or given Uniswap Factory contract
-    pub async fn get_uniswap_pool_address(
+    pub async fn get_uniswap_v3_pool_address(
         &self,
         caller_address: Address, // an arbitrary ethereum address with any amount of ether
         token_a: Address,        // one of the tokens in the pool
         token_b: Address,        // the other token in the pool
         fee_uint24: Option<Uint256>, // The 0.3% fee pool will be used if not specified
-        uniswap_factory: Option<Address>, // The default factory will be used if none is provided
+        uniswap_factory: Option<Address>, // The default v3 factory will be used if none is provided
     ) -> Result<Address, Web3Error> {
-        let factory = uniswap_factory.unwrap_or(*UNISWAP_FACTORY_ADDRESS);
+        let factory = uniswap_factory.unwrap_or(*UNISWAP_V3_FACTORY_ADDRESS);
         let fee_uint24 = fee_uint24.unwrap_or_else(|| 3000u16.into());
         let tokens: Vec<Token> = vec![token_a.into(), token_b.into(), Token::Uint(fee_uint24)];
         let payload = encode_call("getPool(address,address,uint24)", &tokens)?;
@@ -774,22 +884,22 @@ impl Web3 {
     }
 
     /// Identifies token0 and token1 in a Uniswap v3 pool, which all stored data is based off of
-    pub async fn get_uniswap_pool_tokens(
+    pub async fn get_uniswap_v3_pool_tokens(
         &self,
         caller_address: Address, // an arbitrary ethereum address with any amount of ether
         pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
     ) -> Result<(Address, Address), Web3Error> {
         let token0 = self
-            .get_uniswap_pool_token(caller_address, pool_addr, true)
+            .get_uniswap_v3_pool_token(caller_address, pool_addr, true)
             .await?;
         let token1 = self
-            .get_uniswap_pool_token(caller_address, pool_addr, false)
+            .get_uniswap_v3_pool_token(caller_address, pool_addr, false)
             .await?;
         Ok((token0, token1))
     }
 
     /// Returns either token0 or token1 from a Uniswap v3 pool, depending on input
-    pub async fn get_uniswap_pool_token(
+    pub async fn get_uniswap_v3_pool_token(
         &self,
         caller_address: Address, // an arbitrary ethereum address with any amount of ether
         pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
@@ -817,10 +927,10 @@ impl Web3 {
     ///     uint16 observationCardinalityNext,
     ///     uint8 feeProtocol,
     ///     bool unlocked
-    pub async fn get_uniswap_pool_slot0(
+    pub async fn get_uniswap_v3_pool_slot0(
         &self,
-        pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
         caller_address: Address, // an arbitrary ethereum address with any amount of ether
+        pool_addr: Address,      // the ethereum address of the Uniswap v3 pool
     ) -> Result<Vec<u8>, Web3Error> {
         let payload = encode_call("slot0()", &[]).unwrap();
         let slot0_result = self
@@ -835,15 +945,15 @@ impl Web3 {
     /// sqrtPriceX96 is returned as the first value from a call to pool.slot0()
     ///
     /// Note that this value will differ slightly from the swap price due to the pool fee
-    pub async fn get_uniswap_sqrt_price(
+    pub async fn get_uniswap_v3_sqrt_price(
         &self,
         caller_address: Address, // an arbitrary ethereum address with any amount of ether
         pool_address: Address,   // The address of the Uniswap pool contract
     ) -> Result<Uint256, Web3Error> {
         let slot0_result = self
-            .get_uniswap_pool_slot0(pool_address, caller_address)
+            .get_uniswap_v3_pool_slot0(pool_address, caller_address)
             .await?;
-        if slot0_result.len() == 0 {
+        if slot0_result.is_empty() {
             return Err(Web3Error::BadResponse("Zero slot0 response".to_string()));
         }
 
@@ -855,27 +965,31 @@ impl Web3 {
     }
     /// Generates a Uniswap v3 sqrtPriceX96 to allow a maximum amount of slippage on a trade by querying the specified pool
     /// If fee is None then the 0.3% fee pool will be used
-    pub async fn get_slippage_sqrt_price(
+    pub async fn get_v3_slippage_sqrt_price(
         &self,
+        caller_address: Address, // an arbitrary ethereum address with some amount of Ether
         token_in: Address,       // the held token
         token_out: Address,      // the desired token
         fee: Option<Uint256>, // the fee of the Uniswap v3 pool in hundredths of basis points (e.g. 0.05% -> 500)
         slippage: f64,        // the amount of slippage to tolerate (e.g. 0.05 = 5%)
-        caller_address: Address, // an arbitrary ethereum address with some amount of Ether
     ) -> Result<Uint256, Web3Error> {
         let fee = fee.unwrap_or_else(|| 3000u16.into());
         let pool_addr = self
-            .get_uniswap_pool_address(caller_address, token_in, token_out, Some(fee), None)
+            .get_uniswap_v3_pool_address(caller_address, token_in, token_out, Some(fee), None)
             .await?;
         let token0 = self
-            .get_uniswap_pool_token(caller_address, pool_addr, true)
+            .get_uniswap_v3_pool_token(caller_address, pool_addr, true)
             .await?;
         let zero_for_one = token0 == token_in;
         let sqrt_price = self
-            .get_uniswap_sqrt_price(caller_address, pool_addr)
+            .get_uniswap_v3_sqrt_price(caller_address, pool_addr)
             .await?;
 
-        Ok(scale_uniswap_sqrt_price(sqrt_price, slippage, zero_for_one))
+        Ok(scale_v3_uniswap_sqrt_price(
+            sqrt_price,
+            slippage,
+            zero_for_one,
+        ))
     }
 
     /// Returns a sensible swap amount_out for any input sqrt_price_limit, defined as the minimum swap
@@ -883,14 +997,14 @@ impl Web3 {
     ///
     /// Handles the directional nature of swaps by querying the Uniswap v3 pool for its token order
     /// Returns an error if the pool given by token_in, token_out, and fee does not exist
-    pub async fn get_sensible_amount_out_from_sqrt_price(
+    pub async fn get_sensible_amount_out_from_v3_sqrt_price(
         &self,
+        caller_address: Address, // an arbitrary ethereum address with any amount of ether
         sqrt_price_limit: Option<Uint256>, // the sqrt price limit to be used for an on-chain swap
         amount: Uint256, // the amount of token_in to swap for an unknown amount of token_out
         token_in: Address, // the held token
         token_out: Address, // the desired token
         fee: Uint256, // the fee value of the Uniswap pool, in hundredths of basis points (e.g. 0.05% -> 500)
-        caller_address: Address, // an arbitrary ethereum address with any amount of ether
     ) -> Result<Uint256, Web3Error> {
         // Compute a sensible default from sqrt price limit
         if sqrt_price_limit.is_some() {
@@ -898,13 +1012,15 @@ impl Web3 {
             if sqrt_price_limit == 0u8.into() {
                 return Ok(0u8.into());
             }
-            let decoded_price = decode_uniswap_sqrt_price(sqrt_price_limit);
+            let decoded_price = decode_uniswap_v3_sqrt_price(sqrt_price_limit);
             // Get the pool's ethereum address
             let addr = self
-                .get_uniswap_pool_address(caller_address, token_in, token_out, Some(fee), None)
+                .get_uniswap_v3_pool_address(caller_address, token_in, token_out, Some(fee), None)
                 .await?;
             // Get the order of tokens in the pool
-            let (_, token1) = self.get_uniswap_pool_tokens(caller_address, addr).await?;
+            let token1 = self
+                .get_uniswap_v3_pool_token(caller_address, addr, false)
+                .await?;
             let zero_for_one = token1 == token_out;
             // Uniswap sqrt price is stored as the token1 price, we flip to get the token0 price if swapping 1 -> 0
             let sensible_spot_price = if zero_for_one {
@@ -914,7 +1030,11 @@ impl Web3 {
             };
             let amt = amount.to_string().parse::<f64>().unwrap();
             let sensible_amount_out = sensible_spot_price * amt;
-            let sensible_amount_out = sensible_amount_out.floor().to_string().parse::<Uint256>().unwrap();
+            let sensible_amount_out = sensible_amount_out
+                .floor()
+                .to_string()
+                .parse::<Uint256>()
+                .unwrap();
             return Ok(sensible_amount_out);
         }
 
@@ -953,7 +1073,7 @@ fn bad_sqrt_price_limit(sqrt_price_limit: &Uint256) -> bool {
 ///
 /// To convert a spot price to sqrt price, use the spot price as amount_1 and 1u8.into() as amount_0
 /// or use uniswap_sqrt_price_from_price() instead
-pub fn uniswap_sqrt_price_from_amounts(amount_1: Uint256, amount_0: Uint256) -> Uint256 {
+pub fn uniswap_v3_sqrt_price_from_amounts(amount_1: Uint256, amount_0: Uint256) -> Uint256 {
     // Uniswap's javascript implementation with arguments amount1 and amount0
     //   const numerator = JSBI.leftShift(JSBI.BigInt(amount1), JSBI.BigInt(192))
     //   const denominator = JSBI.BigInt(amount0)
@@ -977,7 +1097,7 @@ pub fn uniswap_sqrt_price_from_amounts(amount_1: Uint256, amount_0: Uint256) -> 
 
 /// Encodes a given spot price as a Q64.96 sqrt price which Uniswap expects, used in limiting slippage
 /// See uniswap_sqrt_price_from_amounts for the general case
-pub fn uniswap_sqrt_price_from_price(spot_price: f64) -> Uint256 {
+pub fn uniswap_v3_sqrt_price_from_price(spot_price: f64) -> Uint256 {
     // Because the value is a Q64.96, must scale by 2^96 (the denominator precision)
     // but because it is a square root, we scale by (2^96)^2 = 2^192, then compute the sqrt
     let sqrt_price = (spot_price * 2f64.powi(192)).sqrt();
@@ -986,7 +1106,7 @@ pub fn uniswap_sqrt_price_from_price(spot_price: f64) -> Uint256 {
 }
 
 /// Decodes the Q64.96-encoded sqrt price from Uniswap into an intuitive price
-pub fn decode_uniswap_sqrt_price(sqrt_price: Uint256) -> f64 {
+pub fn decode_uniswap_v3_sqrt_price(sqrt_price: Uint256) -> f64 {
     // Q64.96 values are fixed point numbers with 96 bits of fractional precision, so we divide by 2^96
     // However the uniswap value is also a square root, so we square the result as well
     let tt96 = 2f64.powi(96);
@@ -999,12 +1119,12 @@ pub fn decode_uniswap_sqrt_price(sqrt_price: Uint256) -> f64 {
 /// use get_uniswap_tokens() to receive an ordered tuple (token0: Address, token1: Address)
 ///
 /// For a swap with token0 in and token1 out, zero_for_one must be true. Otherwise it should be false.
-pub fn scale_uniswap_sqrt_price(
+pub fn scale_v3_uniswap_sqrt_price(
     sqrt_price: Uint256,   // The initial sqrt price to work with, a Q64.96
     scale_percentage: f64, // The fraction to scale by, e.g. 0.005f64 to allow 0.5% slippage
     zero_for_one: bool, // The direction of the swap true => token0 -> token1; false => token1 -> token0
 ) -> Uint256 {
-    let spot_price = decode_uniswap_sqrt_price(sqrt_price);
+    let spot_price = decode_uniswap_v3_sqrt_price(sqrt_price);
 
     // Scale sqrt(token1 / token0) based on the direction of the swap.
     // If we are going token0 -> token1 then the new sqrtPrice should be less than our limit
@@ -1018,7 +1138,7 @@ pub fn scale_uniswap_sqrt_price(
     };
     let scaled_price = spot_price * scale_factor;
 
-    uniswap_sqrt_price_from_price(scaled_price) // convert back to sqrt_price
+    uniswap_v3_sqrt_price_from_price(scaled_price) // convert back to sqrt_price
 }
 
 /// This test acquires the sqrt price from the Uniswap v3 DAI / WETH 0.05% pool, then simulates 4 swaps with varying
@@ -1047,7 +1167,7 @@ fn uniswap_sqrt_price_test() {
         let token_b = *DAI_CONTRACT_ADDRESS;
 
         let pool_addr = web3
-            .get_uniswap_pool_address(
+            .get_uniswap_v3_pool_address(
                 caller_address,
                 token_a,
                 token_b,
@@ -1057,13 +1177,13 @@ fn uniswap_sqrt_price_test() {
             .await
             .unwrap();
         let tokens = web3
-            .get_uniswap_pool_tokens(caller_address, pool_addr)
+            .get_uniswap_v3_pool_tokens(caller_address, pool_addr)
             .await;
         info!("tokens result: {:?}", tokens);
         let tokens = tokens.unwrap();
 
         let price = web3
-            .get_uniswap_price(
+            .get_uniswap_v3_price(
                 caller_address,
                 token_a,
                 token_b,
@@ -1077,7 +1197,7 @@ fn uniswap_sqrt_price_test() {
         info!("weth->dai current price is {}", weth2dai);
 
         let pool = web3
-            .get_uniswap_pool_address(
+            .get_uniswap_v3_pool_address(
                 caller_address,
                 token_a,
                 token_b,
@@ -1087,10 +1207,10 @@ fn uniswap_sqrt_price_test() {
             .await
             .unwrap();
 
-        let sqrt_price = web3.get_uniswap_sqrt_price(caller_address, pool).await;
+        let sqrt_price = web3.get_uniswap_v3_sqrt_price(caller_address, pool).await;
         let sqrt_price = sqrt_price.unwrap();
 
-        let spot_price_token0 = decode_uniswap_sqrt_price(sqrt_price.clone());
+        let spot_price_token0 = decode_uniswap_v3_sqrt_price(sqrt_price.clone());
         let spot_price_token1 = spot_price_token0.inv();
         info!(
             "Calculated token0 ({}) worth in token1 ({}): {}",
@@ -1103,23 +1223,23 @@ fn uniswap_sqrt_price_test() {
 
         let little_pad_factor = 0.001f64;
         let little_padded_sqrt_price_0_to_1 =
-            scale_uniswap_sqrt_price(sqrt_price.clone(), little_pad_factor, true);
+            scale_v3_uniswap_sqrt_price(sqrt_price.clone(), little_pad_factor, true);
         let little_padded_sqrt_price_1_to_0 =
-            scale_uniswap_sqrt_price(sqrt_price.clone(), little_pad_factor, false);
+            scale_v3_uniswap_sqrt_price(sqrt_price.clone(), little_pad_factor, false);
 
         let pad_factor = 0.05f64; // 5% tolerance
         let padded_sqrt_price_0_to_1 =
-            scale_uniswap_sqrt_price(sqrt_price.clone(), pad_factor, true);
+            scale_v3_uniswap_sqrt_price(sqrt_price.clone(), pad_factor, true);
         info!(
             "Calculated padded 0->1 sqrt price limit: {}, original {}",
-            decode_uniswap_sqrt_price(padded_sqrt_price_0_to_1.clone()),
+            decode_uniswap_v3_sqrt_price(padded_sqrt_price_0_to_1.clone()),
             spot_price_token0.clone(),
         );
         let padded_sqrt_price_1_to_0 =
-            scale_uniswap_sqrt_price(sqrt_price.clone(), pad_factor, false);
+            scale_v3_uniswap_sqrt_price(sqrt_price.clone(), pad_factor, false);
         info!(
             "Calculated padded 1->0 sqrt price limit: {}, original {}",
-            decode_uniswap_sqrt_price(padded_sqrt_price_1_to_0.clone()),
+            decode_uniswap_v3_sqrt_price(padded_sqrt_price_1_to_0.clone()),
             spot_price_token0.clone(),
         );
         let little_eth = one_eth.clone(); // One Ether
@@ -1200,21 +1320,21 @@ async fn attempt_swap_with_limit(
     pool_fee: Uint256, // the fee level of the pool, given in hundredths of basis points (e.g. 0.05% -> 500)
     expect_failure: bool, // whether or not the amount swapped should violate sqrt_price_with_slippage, causing a panic
 ) {
-    let base_spot_price = decode_uniswap_sqrt_price(sqrt_price_no_slippage);
-    let slippage_spot_price = decode_uniswap_sqrt_price(sqrt_price_with_slippage.clone());
+    let base_spot_price = decode_uniswap_v3_sqrt_price(sqrt_price_no_slippage);
+    let slippage_spot_price = decode_uniswap_v3_sqrt_price(sqrt_price_with_slippage.clone());
     let slippage_tolerance = slippage_spot_price - base_spot_price;
     let pretty_amount = amount.to_string().parse::<f64>().unwrap() / 10f64.powi(18);
     info!(
         "{}: Attempting swap with {} slippage - sqrt_price {}, amount {}, token_in {}, token_out {}",
         i,
         slippage_tolerance,
-        decode_uniswap_sqrt_price(sqrt_price_with_slippage.clone()),
+        decode_uniswap_v3_sqrt_price(sqrt_price_with_slippage.clone()),
         pretty_amount,
         token_in,
         token_out,
     );
     let swap_out = web3
-        .get_uniswap_price(
+        .get_uniswap_v3_price(
             caller_address,
             token_in,
             token_out,
@@ -1277,7 +1397,7 @@ fn get_uniswap_price_test() {
 
     runner.block_on(async move {
         let price = web3
-            .get_uniswap_price(
+            .get_uniswap_v3_price(
                 caller_address,
                 *WETH_CONTRACT_ADDRESS,
                 *DAI_CONTRACT_ADDRESS,
@@ -1291,7 +1411,7 @@ fn get_uniswap_price_test() {
         debug!("weth->dai price is {}", weth2dai);
         assert!(weth2dai > 0u32.into());
         let price = web3
-            .get_uniswap_price(
+            .get_uniswap_v3_price(
                 caller_address,
                 *DAI_CONTRACT_ADDRESS,
                 *WETH_CONTRACT_ADDRESS,
@@ -1366,7 +1486,7 @@ fn swap_hardhat_test() {
         );
 
         let result = web3
-            .swap_uniswap(
+            .swap_uniswap_v3(
                 miner_private_key,
                 *WETH_CONTRACT_ADDRESS,
                 *DAI_CONTRACT_ADDRESS,
@@ -1399,7 +1519,7 @@ fn swap_hardhat_test() {
         let dai_gained = executing_dai.clone() - initial_dai.clone();
         assert!(dai_gained > 0u8.into());
         let result = web3
-            .swap_uniswap(
+            .swap_uniswap_v3(
                 miner_private_key,
                 *DAI_CONTRACT_ADDRESS,
                 *WETH_CONTRACT_ADDRESS,
@@ -1483,7 +1603,7 @@ fn swap_hardhat_eth_in_test() {
             initial_eth, initial_weth, initial_dai
         );
         let result = web3
-            .swap_uniswap_eth_in(
+            .swap_uniswap_v3_eth_in(
                 miner_private_key,
                 *DAI_CONTRACT_ADDRESS,
                 Some(fee.clone()),
@@ -1530,11 +1650,10 @@ fn swap_hardhat_eth_in_test() {
             eth_lost
         );
 
-        assert!(
-            final_weth == initial_weth,
+        assert_eq!(
+            final_weth, initial_weth,
             "Did not expect to modify wETH balance. Started with {} ended with {}",
-            initial_weth,
-            final_weth
+            initial_weth, final_weth
         );
 
         info!(
@@ -1545,16 +1664,18 @@ fn swap_hardhat_eth_in_test() {
 }
 
 #[test]
-fn test_weth_price_fetching() {
+#[ignore]
+fn example_weth_price_fetching() {
     use actix::System;
-    use env_logger::{Builder, Env};
-    use std::time::Duration;
     use clarity::Address;
-    Builder::from_env(Env::default().default_filter_or("debug")).init(); // Change to debug for logs
+    use std::time::Duration;
+    // use env_logger::{Builder, Env};
+    // Builder::from_env(Env::default().default_filter_or("debug")).init(); // Change to debug for logs
 
     let runner = System::new();
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
-    let caller_address = Address::parse_and_validate("0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c").unwrap();
+    let caller_address =
+        Address::parse_and_validate("0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c").unwrap();
     let ten_e18: Uint256 = 1_000_000_000_000_000_000u64.into();
     let ten_e6: Uint256 = 1_000_000u64.into();
 
@@ -1565,11 +1686,78 @@ fn test_weth_price_fetching() {
     let slippage = Some(0.05);
 
     runner.block_on(async move {
-        let pstake_price = web3.get_uniswap_price_with_retries(pstake, weth, ten_e18.clone(), slippage, caller_address).await;
+        let pstake_price = web3
+            .get_uniswap_v3_price_with_retries(
+                caller_address,
+                pstake,
+                weth,
+                ten_e18.clone(),
+                slippage,
+                None,
+            )
+            .await;
         info!("PSTAKE: {:?}", pstake_price);
-        let nym_price    = web3.get_uniswap_price_with_retries(nym, weth, ten_e18.clone(), slippage, caller_address).await;
+        let nym_price = web3
+            .get_uniswap_v3_price_with_retries(
+                caller_address,
+                nym,
+                weth,
+                ten_e6.clone(),
+                slippage,
+                None,
+            )
+            .await;
         info!("NYM: {:?}", nym_price);
-        let dai_price    = web3.get_uniswap_price_with_retries(dai, weth, ten_e18.clone(), slippage, caller_address).await;
+        let dai_price = web3
+            .get_uniswap_v3_price_with_retries(
+                caller_address,
+                dai,
+                weth,
+                ten_e18.clone(),
+                slippage,
+                None,
+            )
+            .await;
         info!("DAI: {:?}", dai_price);
+    });
+}
+
+#[test]
+#[ignore]
+fn example_weth_price_v2() {
+    use actix::System;
+    use clarity::Address;
+    use env_logger::{Builder, Env};
+    use std::time::Duration;
+    Builder::from_env(Env::default().default_filter_or("debug")).init(); // Change to debug for logs
+
+    let runner = System::new();
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
+    let caller_address =
+        Address::parse_and_validate("0x5A0b54D5dc17e0AadC383d2db43B0a0D3E029c4c").unwrap();
+    let ten_e18: Uint256 = 1_000_000_000_000_000_000u64.into();
+    let ten_e6: Uint256 = 1_000_000u64.into();
+
+    let weth = *WETH_CONTRACT_ADDRESS;
+    let pstake = Address::parse_and_validate("0xfB5c6815cA3AC72Ce9F5006869AE67f18bF77006").unwrap();
+    let nym = Address::parse_and_validate("0x525A8F6F3Ba4752868cde25164382BfbaE3990e1").unwrap();
+
+    runner.block_on(async move {
+        let pstake_price = web3
+            .get_uniswap_v2_price(caller_address, pstake, weth, ten_e18.clone(), None)
+            .await;
+        info!("PSTAKE->WETH: {:?}", pstake_price);
+        let pstake_price = web3
+            .get_uniswap_v2_price(caller_address, weth, pstake, ten_e18.clone(), None)
+            .await;
+        info!("WETH->PSTAKE: {:?}", pstake_price);
+        let nym_price = web3
+            .get_uniswap_v2_price(caller_address, nym, weth, ten_e6.clone(), None)
+            .await;
+        info!("NYM->WETH: {:?}", nym_price);
+        let pstake_price = web3
+            .get_uniswap_v2_price(caller_address, weth, nym, ten_e18.clone(), None)
+            .await;
+        info!("WETH->NYM: {:?}", pstake_price);
     });
 }
