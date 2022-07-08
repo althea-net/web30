@@ -874,10 +874,10 @@ impl Web3 {
             .await?;
         trace!("pool result is {:X?}", pool_result);
         let zero_result = vec![0; 32];
-        if pool_result == zero_result {
+        let result_len = pool_result.len();
+        if pool_result == zero_result || result_len < 20 {
             return Err(Web3Error::BadResponse("No such Uniswap pool".to_string()));
         }
-        let result_len = pool_result.len();
         let pool_bytes: &[u8] = &pool_result[result_len - 20..result_len];
 
         Ok(Address::from_slice(pool_bytes).expect("Received invalid pool address from Uniswap"))
@@ -912,10 +912,12 @@ impl Web3 {
             .await?;
         trace!("token_result: {:X?}", token_result);
         let result_len = token_result.len();
+        if result_len < 20 {
+            return Err(Web3Error::BadResponse("Invalid token result".to_string()));
+        }
         let token_bytes: &[u8] = &token_result[result_len - 20..result_len];
 
-        let token =
-            Address::from_slice(token_bytes).expect("Received invalid pool address from Uniswap");
+        let token = Address::from_slice(token_bytes)?;
         Ok(token)
     }
 
@@ -953,7 +955,7 @@ impl Web3 {
         let slot0_result = self
             .get_uniswap_v3_pool_slot0(pool_address, caller_address)
             .await?;
-        if slot0_result.is_empty() {
+        if slot0_result.is_empty() || slot0_result.len() < 32 {
             return Err(Web3Error::BadResponse("Zero slot0 response".to_string()));
         }
 
