@@ -10,12 +10,14 @@ use crate::types::{Block, Log, NewFilter, SyncingStatus, TransactionRequest, Tra
 use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, XdaiBlock};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
-use num::ToPrimitive;
+use num::{ToPrimitive, Zero};
 use num256::Uint256;
 use std::cmp::max;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
 use tokio::time::sleep as delay_for;
+
+const ETHEREUM_INTRINSIC_GAS: u32 = 21000;
 
 /// An instance of Web3Client.
 #[derive(Clone)]
@@ -456,6 +458,14 @@ impl Web3 {
         let mut gas_limit = None;
         let mut network_id = None;
         let our_balance = self.eth_get_balance(own_address).await?;
+        if our_balance.is_zero() || our_balance < ETHEREUM_INTRINSIC_GAS.into() {
+            // We only know that the balance is insufficient, we don't know how much gas is needed
+            return Err(Web3Error::InsufficientGas {
+                balance: our_balance,
+                base_gas: ETHEREUM_INTRINSIC_GAS.into(),
+                gas_required: ETHEREUM_INTRINSIC_GAS.into(),
+            });
+        }
         let mut nonce = self.eth_get_transaction_count(own_address).await?;
 
         for option in options {
@@ -576,6 +586,15 @@ impl Web3 {
         height: Option<Uint256>,
     ) -> Result<Vec<u8>, Web3Error> {
         let our_balance = self.eth_get_balance(own_address).await?;
+        if our_balance.is_zero() || our_balance < ETHEREUM_INTRINSIC_GAS.into() {
+            // We only know that the balance is insufficient, we don't know how much gas is needed
+            return Err(Web3Error::InsufficientGas {
+                balance: our_balance,
+                base_gas: ETHEREUM_INTRINSIC_GAS.into(),
+                gas_required: ETHEREUM_INTRINSIC_GAS.into(),
+            });
+        }
+
         let nonce = self.eth_get_transaction_count(own_address).await?;
 
         let gas = self.simulated_gas_price_and_limit(our_balance).await?;
