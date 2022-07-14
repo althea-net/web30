@@ -290,7 +290,7 @@ impl Web3 {
 fn test_erc721_metadata() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     let bayc_address = "0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D"
         .parse()
         .unwrap();

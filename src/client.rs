@@ -773,8 +773,8 @@ struct SimulatedGas {
 fn test_chain_id() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
-    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
+    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
         assert_eq!(Some(Uint256::from(1u8)), web3.eth_chainid().await.unwrap());
         assert_eq!(
@@ -788,8 +788,8 @@ fn test_chain_id() {
 fn test_net_version() {
     use actix::System;
     let runner = System::new();
-    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(5));
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(30));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
         assert_eq!(1u64, web3.net_version().await.unwrap());
         assert_eq!(100u64, web3_xdai.net_version().await.unwrap());
@@ -800,7 +800,7 @@ fn test_net_version() {
 fn test_complex_response() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     let txid1 = "0x8b9ef028f99016cd3cb8d4168df7491a0bf44f08b678d37f63ab61e782c500ab"
         .parse()
         .unwrap();
@@ -816,7 +816,7 @@ fn test_complex_response() {
 fn test_transaction_count_response() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     let address: Address = "0x04668ec2f57cc15c381b461b9fedab5d451c8f7f"
         .parse()
         .unwrap();
@@ -831,7 +831,7 @@ fn test_transaction_count_response() {
 fn test_block_response() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
         let val = web3.eth_get_latest_block().await;
         let val = val.expect("Actix failure");
@@ -847,7 +847,7 @@ fn test_block_response() {
 fn test_dai_block_response() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
         let val = web3.xdai_get_latest_block().await;
         let val = val.expect("Actix failure");
@@ -862,9 +862,9 @@ fn test_syncing_check_functions() {
     use actix::System;
     let runner = System::new();
     ////// TEST ON NON SYNCING BLOCK
-    let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(30));
     ////// TEST ON SYNCING BLOCK
-    //let web3 = Web3::new("http://127.0.0.1:8545", Duration::from_secs(5));
+    //let web3 = Web3::new("http://127.0.0.1:8545", Duration::from_secs(30));
     runner.block_on(async move {
         let random_address = "0xE04b765c6Ffcc5981DDDcf7e6E2c9E7DB634Df72";
         let val = web3
