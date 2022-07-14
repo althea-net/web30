@@ -261,7 +261,7 @@ impl Web3 {
 fn test_erc20_metadata() {
     use actix::System;
     let runner = System::new();
-    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(5));
+    let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     let dai_address = "0x6b175474e89094c44da98b954eedeac495271d0f"
         .parse()
         .unwrap();
