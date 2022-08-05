@@ -214,7 +214,11 @@ impl Web3 {
         let latest_known_block = self.eth_synced_block_number().await?;
         if block <= latest_known_block {
             self.jsonrpc_client
-                .request_method("eth_call", (transaction, block), self.timeout)
+                .request_method(
+                    "eth_call",
+                    (transaction, format!("{:#x}", block)),
+                    self.timeout,
+                )
                 .await
         } else if self.eth_syncing().await? {
             Err(Web3Error::SyncingNode(
