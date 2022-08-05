@@ -148,14 +148,24 @@ impl Web3 {
         Ok(tx_hash)
     }
 
+    /// Checks the balance that `target_address` has of `erc20`, optionally at a historical height
+    ///
+    /// Optionally provide a gas_payer value if you are checking the balance of e.g. a utility
+    /// contract which holds no Ether
     pub async fn get_erc20_balance(
         &self,
-        erc20: Address,
-        target_address: Address,
+        erc20: Address,             // The ERC20 contract address
+        target_address: Address,    // The address of the wallet potentially holding `erc20`
+        gas_payer: Option<Address>, // Any address with enough Ether to pay a query
+        height: Option<Uint256>,
     ) -> Result<Uint256, Web3Error> {
+        let gas_payer = match gas_payer {
+            None => target_address.clone(),
+            Some(payer) => payer,
+        };
         let payload = encode_call("balanceOf(address)", &[target_address.into()])?;
         let balance = self
-            .simulate_transaction(erc20, 0u8.into(), payload, target_address, None)
+            .simulate_transaction(erc20, 0u8.into(), payload, gas_payer, height.into())
             .await?;
 
         Ok(Uint256::from_bytes_be(match balance.get(0..32) {

@@ -1474,11 +1474,11 @@ fn swap_hardhat_test() {
             panic!("Failed to wrap eth before testing uniswap");
         }
         let initial_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         let initial_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
 
@@ -1506,11 +1506,11 @@ fn swap_hardhat_test() {
             panic!("Error performing first swap: {:?}", result.err());
         }
         let executing_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         let executing_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         info!(
@@ -1539,11 +1539,11 @@ fn swap_hardhat_test() {
             panic!("Error performing second swap: {:?}", result.err());
         }
         let final_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         let final_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         info!("Final WETH: {}, Final DAI: {}", final_weth, final_dai);
@@ -1592,11 +1592,11 @@ fn swap_hardhat_eth_in_test() {
 
         let initial_eth = web3.eth_get_balance(miner_address).await.unwrap();
         let initial_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         let initial_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
 
@@ -1623,11 +1623,11 @@ fn swap_hardhat_eth_in_test() {
         }
         let final_eth = web3.eth_get_balance(miner_address).await.unwrap();
         let final_weth = web3
-            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*WETH_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         let final_dai = web3
-            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address)
+            .get_erc20_balance(*DAI_CONTRACT_ADDRESS, miner_address, None, None)
             .await
             .unwrap();
         info!(
