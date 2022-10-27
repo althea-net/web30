@@ -129,7 +129,11 @@ impl Web3 {
                     .request_method("eth_gasPrice", Vec::<String>::new(), self.timeout)
                     .await?;
                 if let Some(gas) = self.get_base_fee_per_gas().await? {
-                    Ok(gas)
+                    if median_gas < gas {
+                        Ok(gas)
+                    } else {
+                        Ok(median_gas)
+                    }
                 } else {
                     Ok(median_gas)
                 }
@@ -697,15 +701,9 @@ impl Web3 {
         balance: Uint256,
     ) -> Result<SimulatedGas, Web3Error> {
         const GAS_LIMIT: u128 = 12450000;
-        let base_fee_per_gas = self.get_base_fee_per_gas().await?;
-        let price = match base_fee_per_gas {
-            // post London
-            Some(base_gas) => base_gas,
-            // pre London
-            None => 1u8.into(),
-        };
-        let limit = min(GAS_LIMIT.into(), balance / price.clone());
-        Ok(SimulatedGas { limit, price })
+        let gas_price = self.eth_gas_price().await?;
+        let limit = min(GAS_LIMIT.into(), balance / gas_price.clone());
+        Ok(SimulatedGas { limit, price: gas_price })
     }
 
     /// Navigates the block request process to properly identify the base fee no matter
