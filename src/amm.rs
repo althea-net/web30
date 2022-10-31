@@ -34,6 +34,9 @@ lazy_static! {
     /// The Wrapped Ether's address, on prod Ethereum
     pub static ref WETH_CONTRACT_ADDRESS: Address =
         Address::parse_and_validate("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2").unwrap();
+    /// The USDC contract address, on prod Ethereum
+    pub static ref USDC_CONTRACT_ADDRESS: Address =
+        Address::parse_and_validate("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap();
 
     // The suggested Uniswap v3 pool fee levels in order:
     // 0.3% (most pairs), 0.05% (for stable pairs), 0.01% (very stable pairs), 1% (exotic pairs)
@@ -953,7 +956,7 @@ impl Web3 {
         pool_address: Address,   // The address of the Uniswap pool contract
     ) -> Result<Uint256, Web3Error> {
         let slot0_result = self
-            .get_uniswap_v3_pool_slot0(pool_address, caller_address)
+            .get_uniswap_v3_pool_slot0(caller_address, pool_address)
             .await?;
         if slot0_result.is_empty() || slot0_result.len() < 32 {
             return Err(Web3Error::BadResponse("Zero slot0 response".to_string()));
