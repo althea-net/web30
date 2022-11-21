@@ -153,9 +153,19 @@ impl Web3 {
         erc20: Address,
         target_address: Address,
     ) -> Result<Uint256, Web3Error> {
+        self.get_erc20_balance_at_height(erc20, target_address, None)
+            .await
+    }
+
+    pub async fn get_erc20_balance_at_height(
+        &self,
+        erc20: Address,
+        target_address: Address,
+        height: Option<Uint256>,
+    ) -> Result<Uint256, Web3Error> {
         let payload = encode_call("balanceOf(address)", &[target_address.into()])?;
         let balance = self
-            .simulate_transaction(erc20, 0u8.into(), payload, target_address, None)
+            .simulate_transaction(erc20, 0u8.into(), payload, target_address, height)
             .await?;
 
         Ok(Uint256::from_bytes_be(match balance.get(0..32) {
