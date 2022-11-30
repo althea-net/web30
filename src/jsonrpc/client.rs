@@ -41,9 +41,10 @@ impl HttpClient {
     ) -> Result<R, Web3Error>
     where
         for<'de> R: Deserialize<'de>,
-        // T: std::fmt::Debug,
+        T: std::fmt::Debug,
         R: std::fmt::Debug,
     {
+        trace!("Making request {} {:?}", method, params);
         let payload = Request::new(self.next_id(), method, params);
         let res = self
             .client

@@ -159,7 +159,7 @@ pub struct NewFilter {
     pub topics: Option<Vec<Option<Vec<Option<String>>>>>,
 }
 
-#[derive(Serialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Clone, Eq, PartialEq, Debug)]
 pub struct TransactionRequest {
     //The address the transaction is send from.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -239,9 +239,6 @@ pub struct Block {
     pub parent_hash: Uint256,
     #[serde(rename = "receiptsRoot")]
     pub receipts_root: Uint256,
-    // Geth also does not include this field.
-    #[serde(rename = "sealFields")]
-    pub seal_fields: Option<Vec<Uint256>>,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
     pub size: Uint256,
@@ -283,15 +280,12 @@ pub struct XdaiBlock {
     pub parent_hash: Uint256,
     #[serde(rename = "receiptsRoot")]
     pub receipts_root: Uint256,
-    #[serde(rename = "sealFields")]
-    pub seal_fields: Vec<Uint256>,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
     pub signature: String,
     pub size: Uint256,
     #[serde(rename = "stateRoot")]
     pub state_root: Uint256,
-    pub step: Uint256,
     pub timestamp: Uint256,
     #[serde(rename = "totalDifficulty")]
     pub total_difficulty: Uint256,
@@ -332,9 +326,6 @@ pub struct ConciseBlock {
     pub parent_hash: Uint256,
     #[serde(rename = "receiptsRoot")]
     pub receipts_root: Uint256,
-    // Geth also does not include this field.
-    #[serde(rename = "sealFields")]
-    pub seal_fields: Option<Vec<Uint256>>,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
     pub size: Uint256,
@@ -376,15 +367,12 @@ pub struct ConciseXdaiBlock {
     pub parent_hash: Uint256,
     #[serde(rename = "receiptsRoot")]
     pub receipts_root: Uint256,
-    #[serde(rename = "sealFields")]
-    pub seal_fields: Vec<Uint256>,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
     pub signature: String,
     pub size: Uint256,
     #[serde(rename = "stateRoot")]
     pub state_root: Uint256,
-    pub step: Uint256,
     pub timestamp: Uint256,
     #[serde(rename = "totalDifficulty")]
     pub total_difficulty: Uint256,
@@ -551,6 +539,39 @@ mod tests {
 }
 "#;
         let _decoded: ConciseXdaiBlock = serde_json::from_str(original).unwrap();
+
+        let original_2 = r#"
+        {
+    "author": "0xd653a665ff07d48fe0f239d184f28a54b00ec1ce",
+    "difficulty": "0xfffffffffffffffffffffffffffffffe",
+    "extraData": "0x4e65746865726d696e64",
+    "gasLimit": "0x1c9c380",
+    "gasUsed": "0x19b6c",
+    "hash": "0xfbe725380efc0208ffdd45c0e06de5a1a478eb6b0ac5361d85ab1f4b59102691",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000008000000000000000000000000000000000000000000010008000000000000000000000000000000000000020000000000000000000000000000020000000000000000000000000010000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200004000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000",
+    "miner": "0xd653a665ff07d48fe0f239d184f28a54b00ec1ce",
+    "number": "0x1810890",
+    "parentHash": "0xd85c7fd8c39406d4c7d6e87d8ca718314ed8eed989fb27c73ff8f37f6e46a553",
+    "receiptsRoot": "0x223ea9ebab548b147c459aa98c25cdabf81b06cd91572238ee23b269afb5dff5",
+    "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+    "signature": "0x327ee1880ab9ad31ae83669bcf0f8d74fdc0c2ece681065f9e5bd9e46804f6d41c7548ce6d47d7d02144a00ffe299e25fd914fca3e5c4bbd585f478e1353445501",
+    "size": "0x3fb",
+    "stateRoot": "0x55a720816a33f93343fa1a9cba04f157240e49ed46616d460120fe9d37d35dad",
+    "step": 333965182,
+    "totalDifficulty": "0x181088fffffffffffffffffffffffffea990ff2",
+    "timestamp": "0x63878576",
+    "baseFeePerGas": "0x7",
+    "transactions": [
+      "0x6a15f46514b459c01df01572b1325f296e51af830c1497a3b77c69673e4167d3",
+      "0xab56a411cbebbe3c7e2725ec4cd0aa192160d9e88b7da449a31060fdd7f3793b",
+      "0xb0e64f9f8d0ff81c0967e343608c402af46d222fb0b3b3549668d52872ed1bba"
+    ],
+    "transactionsRoot": "0xd8825c8523866becd01351ee34821cd832ba608e170a2a09426cc1ca509cda2f",
+    "uncles": []
+        }
+        "#;
+
+        let _decoded: ConciseXdaiBlock = serde_json::from_str(original_2).unwrap();
     }
 
     #[test]

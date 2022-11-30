@@ -703,7 +703,10 @@ impl Web3 {
         const GAS_LIMIT: u128 = 12450000;
         let gas_price = self.eth_gas_price().await?;
         let limit = min(GAS_LIMIT.into(), balance / gas_price.clone());
-        Ok(SimulatedGas { limit, price: gas_price })
+        Ok(SimulatedGas {
+            limit,
+            price: gas_price,
+        })
     }
 
     /// Navigates the block request process to properly identify the base fee no matter
@@ -786,7 +789,7 @@ fn test_chain_id() {
 fn test_net_version() {
     use actix::System;
     let runner = System::new();
-    let web3_xdai = Web3::new("https://dai.althea.net", Duration::from_secs(30));
+    let web3_xdai = Web3::new("https://dai.altheamesh.com", Duration::from_secs(30));
     let web3 = Web3::new("https://eth.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
         assert_eq!(1u64, web3.net_version().await.unwrap());
