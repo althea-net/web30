@@ -148,6 +148,10 @@ impl Web3 {
         Ok(tx_hash)
     }
 
+    /// Queries the `target_address`'s current balance of `erc20`
+    ///
+    /// See get_erc20_balance_at_height and get_erc20_balance_as_address if you need more
+    /// flexibility including historical balances and balances of targets which hold very little ETH
     pub async fn get_erc20_balance(
         &self,
         erc20: Address,
@@ -157,15 +161,53 @@ impl Web3 {
             .await
     }
 
+    /// Queries the `target_address`'s balance of `erc20` at an optional ethereum `height`
+    ///
+    /// The latest balance from the current block will be queried if `height` is None
     pub async fn get_erc20_balance_at_height(
         &self,
         erc20: Address,
         target_address: Address,
         height: Option<Uint256>,
     ) -> Result<Uint256, Web3Error> {
+        self.get_erc20_balance_at_height_as_address(None, erc20, target_address, height)
+            .await
+    }
+
+    /// Queries the `target_address`'s balance of `erc20` using `requester_address` as the
+    /// transaction's `from` field
+    ///
+    /// The `target_address` will be used as `from` if `requester_address` is None
+    ///
+    /// This is particularly useful if the ERC20 holder has too little ETH for gas fees, e.g. Gravity.sol
+    pub async fn get_erc20_balance_as_address(
+        &self,
+        requester_address: Option<Address>,
+        erc20: Address,
+        target_address: Address,
+    ) -> Result<Uint256, Web3Error> {
+        self.get_erc20_balance_at_height_as_address(requester_address, erc20, target_address, None)
+            .await
+    }
+
+    /// Queries the `target_address`'s balance of `erc20` at an optional ethereum `height`, using
+    /// `requester_address` as the transaction's `from` field
+    ///
+    /// The `target_address` will be used as `from` if `requester_address` is None
+    /// The latest balance from the current block will be queried if `height` is None
+    ///
+    /// This is particularly useful if the ERC20 holder had too little ETH for gas fees, e.g. Gravity.sol
+    pub async fn get_erc20_balance_at_height_as_address(
+        &self,
+        requester_address: Option<Address>,
+        erc20: Address,
+        target_address: Address,
+        height: Option<Uint256>,
+    ) -> Result<Uint256, Web3Error> {
+        let requester_address = requester_address.unwrap_or(target_address);
         let payload = encode_call("balanceOf(address)", &[target_address.into()])?;
         let balance = self
-            .simulate_transaction(erc20, 0u8.into(), payload, target_address, height)
+            .simulate_transaction(erc20, 0u8.into(), payload, requester_address, height)
             .await?;
 
         Ok(Uint256::from_bytes_be(match balance.get(0..32) {
