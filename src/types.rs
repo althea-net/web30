@@ -282,7 +282,6 @@ pub struct XdaiBlock {
     pub receipts_root: Uint256,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
-    pub signature: String,
     pub size: Uint256,
     #[serde(rename = "stateRoot")]
     pub state_root: Uint256,
@@ -369,7 +368,6 @@ pub struct ConciseXdaiBlock {
     pub receipts_root: Uint256,
     #[serde(rename = "sha3Uncles")]
     pub sha3_uncles: Uint256,
-    pub signature: String,
     pub size: Uint256,
     #[serde(rename = "stateRoot")]
     pub state_root: Uint256,
@@ -572,6 +570,58 @@ mod tests {
         "#;
 
         let _decoded: ConciseXdaiBlock = serde_json::from_str(original_2).unwrap();
+
+        let original_3 = r#"
+        {
+            "author": "0x0000000000000000000000000000000000000000",
+            "difficulty": "0x0",
+            "extraData": "0x4e65746865726d696e64",
+            "gasLimit": "0x1c9c380",
+            "gasUsed": "0x300617",
+            "hash": "0x16a2e52277bab1733a915ccf32f9ef570c750920fac880860846022bb6f3a7a9",
+            "logsBloom": "0x142400400000000800c000008881202000000080400000011000000800000040208000080001408000000001000002000004400000900000000001014002000000000020000080000000000800210022000000000201040004001000000020000000000002800000010000001000080000000000200040000000001000000a80080000000000000008080084080200011000000000000448000000400000a120020000000000000000810000200006000000010004000010001000014000000046002022000000000004000000000004000200000010001472000010010020002000000042000000000044040083204000000020400204000000000080502800",
+            "miner": "0x0000000000000000000000000000000000000000",
+            "mixHash": "0x1a039b0e86666ecae056f68aee88d1dcf55a42906dbc3a933c6c70c7d194573d",
+            "nonce": "0x0000000000000000",
+            "number": "0x182cda1",
+            "parentHash": "0xf5cff68065ac6014bb7c9aa731d4d4084de0994f807ac1df3856308b3c9b2b48",
+            "receiptsRoot": "0xa74f6b2415ce575737eb9506d962cfc73cc49eedca64768472871c6dedb6748a",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "size": "0x2689",
+            "stateRoot": "0x3748aef0bfc4093620b3172d70386b3ee5fc879c5037723d288bd1622f5d5e9c",
+            "totalDifficulty": "0x182cd9fffffffffffffffffffffffffea9528a2",
+            "timestamp": "0x639230c5",
+            "baseFeePerGas": "0x7",
+            "transactions": [
+              "0x60cef2489561b636f5793c98120cfe6bfc3b15a898daf11c84ce80878b1b3431",
+              "0xee3d828f293133254edb18d21fc392871acdf6aa2ecf739422fbe9cecf8c6498",
+              "0xd22c2ea2a16b46fdd34c383f0153945c628d128288c6cae0a9373ec2d220bde7",
+              "0x7f8a2bedc26c824b7fcf769e825652fe25e9e5bb8b2ecafc3ab555a131fa69f3",
+              "0x19765aca533e3862f687371bc02b38e391928b13ab046550a8dee6d0d260aa29",
+              "0x6813a65e2b8e328a983304596ac23c0e86c14a3c1e20ea2f9b2479c490723b8a",
+              "0x068f12560208612f087b117d28ccd9dbda4b48a4a02c2445b3634447597a0d97",
+              "0xda7ee89de3f89d5a86c568addf1b11e49164dec3de29707eaa7e860aadb43625",
+              "0x9f46345740e266958970ea02f88630d8b09cc1b69fffe0c3d21fa6de2e814f8e",
+              "0xea9ca613fa4a74e3fbad3706e987c99dd94bcb11210a4c8fe2493f6bec25957c",
+              "0x7c814f10f78d37f3dd24c402814b5e1af90b48f285d6d03523c5609398ee4657",
+              "0xf15eb52dc060e181c5f13ad0fd8f480748cc8019caa0b27ab158d29f016c144f",
+              "0x2edf6111cbd6d81c50e1c6a2b6b8f06f9b543ed1b2a0315b57fb3c0671648472",
+              "0xa1e440de0edf3bcff46a7843b27f5fa2e6a37ac1d0e47c05cf960c1022a97f60",
+              "0xb33827a02e123a1e56b52bcd70962ede42f5d4c65fb322cd0c25fa76c9541de9",
+              "0xae375b9963318d42b6c19a66a3ce7664fcfaccee40a4799ece6af644ea53c705",
+              "0x22d2f1baadd1984a088c2efc9e9fd80f2b0a140ba2b253ebfd8eb6c371eba057",
+              "0x9c77b2e9df09ed82c1f34787ca0239444c8a056ff4b4d55307befaf2c4e59f39",
+              "0xfee4eca8820b8b40a5f0753b1b64148b805bbe968b18a346f4adf57a25fa6b9c",
+              "0x577fe6aedb2e1ce7de98558552926697b5d840c6db4b900d32080cd3bc772ffb",
+              "0xebb83e56edc9ad99352f31e5ab8e39bc3a93adae55eea1f8079da10f0ebd2343",
+              "0x713652fd3fd612391c6a837f303b6243e4034c83bdc6506f01da22daa6e20d9b"
+            ],
+            "transactionsRoot": "0x8b2b9dcc882c5dd1db598b53e3dfb73a1b03004fe09ff2a55e8e499640e738eb",
+            "uncles": []
+          }
+        "#;
+
+        let _decoded: ConciseXdaiBlock = serde_json::from_str(original_3).unwrap();
     }
 
     #[test]
