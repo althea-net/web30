@@ -7,12 +7,11 @@
 use crate::jsonrpc::client::HttpClient;
 use crate::jsonrpc::error::Web3Error;
 use crate::types::{Block, Log, NewFilter, SyncingStatus, TransactionRequest, TransactionResponse};
-use crate::types::{ConciseBlock, ConciseXdaiBlock, Data, SendTxOption, XdaiBlock};
+use crate::types::{ConciseBlock, Data, SendTxOption};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
 use num::{ToPrimitive, Zero};
 use num256::Uint256;
-use std::cmp::max;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
 use tokio::time::sleep as delay_for;
@@ -273,30 +272,6 @@ impl Web3 {
         }
     }
 
-    pub async fn xdai_get_block_by_number(
-        &self,
-        block_number: Uint256,
-    ) -> Result<XdaiBlock, Web3Error> {
-        let latest_known_block = self.eth_synced_block_number().await?;
-        if block_number <= latest_known_block {
-            self.jsonrpc_client
-                .request_method(
-                    "eth_getBlockByNumber",
-                    (format!("{:#x}", block_number), true),
-                    self.timeout,
-                )
-                .await
-        } else if self.eth_syncing().await? {
-            Err(Web3Error::SyncingNode(
-                "Cannot perform xdai_get_block_by_number".to_string(),
-            ))
-        } else {
-            Err(Web3Error::BadInput(
-                "Cannot perform xdai_get_block_by_number, block number invalid".to_string(),
-            ))
-        }
-    }
-
     pub async fn eth_get_concise_block_by_number(
         &self,
         block_number: Uint256,
@@ -321,30 +296,6 @@ impl Web3 {
         }
     }
 
-    pub async fn xdai_get_concise_block_by_number(
-        &self,
-        block_number: Uint256,
-    ) -> Result<ConciseXdaiBlock, Web3Error> {
-        let latest_known_block = self.eth_synced_block_number().await?;
-        if block_number <= latest_known_block {
-            self.jsonrpc_client
-                .request_method(
-                    "eth_getBlockByNumber",
-                    (format!("{:#x}", block_number), false),
-                    self.timeout,
-                )
-                .await
-        } else if self.eth_syncing().await? {
-            Err(Web3Error::SyncingNode(
-                "Cannot perform xdai_get_concise_block_by_number".to_string(),
-            ))
-        } else {
-            Err(Web3Error::BadInput(
-                "Cannot perform xdai_get_concise_block_by_number, block number invalid".to_string(),
-            ))
-        }
-    }
-
     pub async fn eth_get_latest_block(&self) -> Result<ConciseBlock, Web3Error> {
         match self.eth_syncing().await? {
             false => {
@@ -358,19 +309,6 @@ impl Web3 {
         }
     }
 
-    pub async fn xdai_get_latest_block(&self) -> Result<ConciseXdaiBlock, Web3Error> {
-        match self.eth_syncing().await? {
-            false => {
-                self.jsonrpc_client
-                    .request_method("eth_getBlockByNumber", ("latest", false), self.timeout)
-                    .await
-            }
-            _ => Err(Web3Error::SyncingNode(
-                "Cannot perform xdai_get_latest_block".to_string(),
-            )),
-        }
-    }
-
     pub async fn eth_get_latest_block_full(&self) -> Result<Block, Web3Error> {
         match self.eth_syncing().await? {
             false => {
@@ -380,19 +318,6 @@ impl Web3 {
             }
             _ => Err(Web3Error::SyncingNode(
                 "Cannot perform eth_get_latest_block".to_string(),
-            )),
-        }
-    }
-
-    pub async fn xdai_get_latest_block_full(&self) -> Result<XdaiBlock, Web3Error> {
-        match self.eth_syncing().await? {
-            false => {
-                self.jsonrpc_client
-                    .request_method("eth_getBlockByNumber", ("latest", true), self.timeout)
-                    .await
-            }
-            _ => Err(Web3Error::SyncingNode(
-                "Cannot perform xdai_get_latest_block".to_string(),
             )),
         }
     }
@@ -718,35 +643,9 @@ impl Web3 {
     /// network is in use and `Some(base_fee_per_gas)` if a post London network is in
     /// use
     async fn get_base_fee_per_gas(&self) -> Result<Option<Uint256>, Web3Error> {
-        let eth = self.eth_get_latest_block().await;
-        let xdai = self.xdai_get_latest_block().await;
-        // we don't know what network we're on, so we request both blocks and
-        // see which one succeeds. This could in theory be removed if we
-        // combine the eth and xdai blocks or require some sort of flag on init
-        // for the web30 struct
-        match (eth, xdai) {
-            // this case is confusing, I'm pretty sure, but not 100% sure that
-            // it's impossible. That being said we better handle it just to be safe
-            // if we have some polyglot block that is interpretable through both types
-            // this entire section contains a lot of guesswork for cases that will probably
-            // never happen
-            (Ok(eth_block), Ok(xdai_block)) => {
-                warn!("Found polyglot blocks! {:?} {:?}", eth_block, xdai_block);
-                match (eth_block.base_fee_per_gas, xdai_block.base_fee_per_gas) {
-                    // polyglot block, these values should be identical, but take the max
-                    (Some(base_gas_a), Some(base_gas_b)) => Ok(Some(max(base_gas_a, base_gas_b))),
-                    // this is event more crazy than a polyglot block, the field name is the same
-                    // nevertheless we should take the value that exists
-                    (Some(base_gas), None) | (None, Some(base_gas)) => Ok(Some(base_gas)),
-
-                    (None, None) => Ok(None),
-                }
-            }
-            (Err(_), Ok(block)) => Ok(block.base_fee_per_gas),
-            (Ok(block), Err(_)) => Ok(block.base_fee_per_gas),
-            // if both error it's probably the same error so lets pick the first
-            // and return it
-            (Err(e), Err(_)) => Err(e),
+        match self.eth_get_latest_block().await {
+            Ok(eth_block) => Ok(eth_block.base_fee_per_gas),
+            Err(e) => Err(e),
         }
     }
 
@@ -854,7 +753,7 @@ fn test_dai_block_response() {
     let runner = System::new();
     let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
-        let val = web3.xdai_get_latest_block().await;
+        let val = web3.eth_get_latest_block().await;
         let val = val.expect("Actix failure");
         assert!(val.number > 10u32.into());
     });

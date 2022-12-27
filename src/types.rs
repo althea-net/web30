@@ -231,50 +231,6 @@ pub struct Block {
     #[serde(rename = "logsBloom")]
     pub logs_bloom: Data,
     pub miner: Address,
-    #[serde(rename = "mixHash")]
-    pub mix_hash: Uint256,
-    pub nonce: Uint256,
-    pub number: Uint256,
-    #[serde(rename = "parentHash")]
-    pub parent_hash: Uint256,
-    #[serde(rename = "receiptsRoot")]
-    pub receipts_root: Uint256,
-    #[serde(rename = "sha3Uncles")]
-    pub sha3_uncles: Uint256,
-    pub size: Uint256,
-    #[serde(rename = "stateRoot")]
-    pub state_root: Uint256,
-    pub timestamp: Uint256,
-    #[serde(rename = "totalDifficulty")]
-    pub total_difficulty: Uint256,
-    pub transactions: Vec<TransactionResponse>,
-    #[serde(rename = "transactionsRoot")]
-    pub transactions_root: Uint256,
-    pub uncles: Vec<Uint256>,
-}
-
-/// Xdai block
-#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
-pub struct XdaiBlock {
-    pub author: Address,
-    pub difficulty: Uint256,
-    #[serde(
-        rename = "extraData",
-        deserialize_with = "parse_possibly_empty_hex_val"
-    )]
-    pub extra_data: Uint256,
-    #[serde(rename = "gasLimit")]
-    pub gas_limit: Uint256,
-    #[serde(rename = "gasUsed")]
-    pub gas_used: Uint256,
-    /// this field will not exist until after
-    /// the london hardfork
-    #[serde(rename = "baseFeePerGas")]
-    pub base_fee_per_gas: Option<Uint256>,
-    pub hash: Uint256,
-    #[serde(rename = "logsBloom")]
-    pub logs_bloom: Data,
-    pub miner: Address,
     pub number: Uint256,
     #[serde(rename = "parentHash")]
     pub parent_hash: Uint256,
@@ -299,50 +255,6 @@ pub struct XdaiBlock {
 pub struct ConciseBlock {
     // geth does not include the author in it's RPC response.
     pub author: Option<Address>,
-    pub difficulty: Uint256,
-    #[serde(
-        rename = "extraData",
-        deserialize_with = "parse_possibly_empty_hex_val"
-    )]
-    pub extra_data: Uint256,
-    #[serde(rename = "gasLimit")]
-    pub gas_limit: Uint256,
-    #[serde(rename = "gasUsed")]
-    pub gas_used: Uint256,
-    /// this field will not exist until after
-    /// the london hardfork
-    #[serde(rename = "baseFeePerGas")]
-    pub base_fee_per_gas: Option<Uint256>,
-    pub hash: Uint256,
-    #[serde(rename = "logsBloom")]
-    pub logs_bloom: Data,
-    pub miner: Address,
-    #[serde(rename = "mixHash")]
-    pub mix_hash: Uint256,
-    pub nonce: Uint256,
-    pub number: Uint256,
-    #[serde(rename = "parentHash")]
-    pub parent_hash: Uint256,
-    #[serde(rename = "receiptsRoot")]
-    pub receipts_root: Uint256,
-    #[serde(rename = "sha3Uncles")]
-    pub sha3_uncles: Uint256,
-    pub size: Uint256,
-    #[serde(rename = "stateRoot")]
-    pub state_root: Uint256,
-    pub timestamp: Uint256,
-    #[serde(rename = "totalDifficulty")]
-    pub total_difficulty: Uint256,
-    pub transactions: Vec<Uint256>,
-    #[serde(rename = "transactionsRoot")]
-    pub transactions_root: Uint256,
-    pub uncles: Vec<Uint256>,
-}
-
-/// Xdai block with more concise tx hashes instead of full transactions
-#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq)]
-pub struct ConciseXdaiBlock {
-    pub author: Address,
     pub difficulty: Uint256,
     #[serde(
         rename = "extraData",
@@ -536,7 +448,7 @@ mod tests {
     "uncles": []
 }
 "#;
-        let _decoded: ConciseXdaiBlock = serde_json::from_str(original).unwrap();
+        let _decoded: ConciseBlock = serde_json::from_str(original).unwrap();
 
         let original_2 = r#"
         {
@@ -569,7 +481,7 @@ mod tests {
         }
         "#;
 
-        let _decoded: ConciseXdaiBlock = serde_json::from_str(original_2).unwrap();
+        let _decoded: ConciseBlock = serde_json::from_str(original_2).unwrap();
 
         let original_3 = r#"
         {
@@ -621,7 +533,7 @@ mod tests {
           }
         "#;
 
-        let _decoded: ConciseXdaiBlock = serde_json::from_str(original_3).unwrap();
+        let _decoded: ConciseBlock = serde_json::from_str(original_3).unwrap();
     }
 
     #[test]
@@ -660,6 +572,6 @@ mod tests {
         let file = read_to_string("test_files/complete_xdai_block.json")
             .expect("Failed to read test files!");
 
-        let _decoded: XdaiBlock = serde_json::from_str(&file).unwrap();
+        let _decoded: Block = serde_json::from_str(&file).unwrap();
     }
 }
