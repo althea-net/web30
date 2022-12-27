@@ -296,6 +296,7 @@ impl Web3 {
         }
     }
 
+    /// Gets the latest (non finalized) block including tx hashes instead of full tx data
     pub async fn eth_get_latest_block(&self) -> Result<ConciseBlock, Web3Error> {
         match self.eth_syncing().await? {
             false => {
@@ -309,11 +310,40 @@ impl Web3 {
         }
     }
 
+    /// Gets the latest (non finalized) block including full tx data
     pub async fn eth_get_latest_block_full(&self) -> Result<Block, Web3Error> {
         match self.eth_syncing().await? {
             false => {
                 self.jsonrpc_client
                     .request_method("eth_getBlockByNumber", ("latest", true), self.timeout)
+                    .await
+            }
+            _ => Err(Web3Error::SyncingNode(
+                "Cannot perform eth_get_latest_block".to_string(),
+            )),
+        }
+    }
+
+    /// Gets the latest (finalized) block including tx hashes instead of full tx data
+    pub async fn eth_get_finalized_block(&self) -> Result<ConciseBlock, Web3Error> {
+        match self.eth_syncing().await? {
+            false => {
+                self.jsonrpc_client
+                    .request_method("eth_getBlockByNumber", ("finalized", false), self.timeout)
+                    .await
+            }
+            _ => Err(Web3Error::SyncingNode(
+                "Cannot perform eth_get_latest_block".to_string(),
+            )),
+        }
+    }
+
+    /// Gets the latest (finalized) block including full tx data
+    pub async fn eth_get_finalized_block_full(&self) -> Result<Block, Web3Error> {
+        match self.eth_syncing().await? {
+            false => {
+                self.jsonrpc_client
+                    .request_method("eth_getBlockByNumber", ("finalized", true), self.timeout)
                     .await
             }
             _ => Err(Web3Error::SyncingNode(
@@ -744,6 +774,17 @@ fn test_block_response() {
         let val = web3.eth_get_latest_block_full().await;
         let val = val.expect("Actix failure");
         assert!(val.number > 10u32.into());
+        trace!("latest {}", val.number);
+        let latest = val.number;
+
+        let val = web3.eth_get_finalized_block_full().await;
+        let val = val.expect("Actix failure");
+        assert!(val.number > 10u32.into());
+        trace!(
+            "finalized {}, diff {}",
+            val.number.clone(),
+            latest - val.number
+        );
     });
 }
 
@@ -754,6 +795,9 @@ fn test_dai_block_response() {
     let web3 = Web3::new("https://dai.althea.net", Duration::from_secs(30));
     runner.block_on(async move {
         let val = web3.eth_get_latest_block().await;
+        let val = val.expect("Actix failure");
+        assert!(val.number > 10u32.into());
+        let val = web3.eth_get_finalized_block().await;
         let val = val.expect("Actix failure");
         assert!(val.number > 10u32.into());
     });
