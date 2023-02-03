@@ -3,13 +3,13 @@ use crate::{client::Web3, jsonrpc::error::Web3Error, types::SendTxOption};
 use clarity::utils::display_uint256_as_address;
 use clarity::{
     abi::{encode_call, Token},
-    constants::{TT160M1, TT24M1},
+    constants::{tt160m1, tt24m1},
     Address, PrivateKey, Uint256,
 };
-use num::traits::Inv;
-use num::BigUint;
+use num_traits::Inv;
 use std::time::Duration;
 use tokio::time::timeout as future_timeout;
+
 
 /// Default padding multiplied to uniswap exchange gas limit values due to variablity of gas limit values
 /// between iterations
@@ -106,7 +106,7 @@ impl Web3 {
         // Throw away the first two values (type code and response length), then parse Uint256's from each 32 byte chunk
         let amounts = amounts_bytes[64..]
             .chunks(32)
-            .map(Uint256::from_bytes_be)
+            .map(Uint256::from_be_bytes)
             .collect::<Vec<Uint256>>();
         debug!("Got amounts from response: {:?}", amounts);
         // The last amount is the output
@@ -355,7 +355,7 @@ impl Web3 {
 
         let decoded_sqrt_price = decode_uniswap_v3_sqrt_price(sqrt_price_limit_x96.clone());
 
-        let amount_out = Uint256::from_bytes_be(match result.get(0..32) {
+        let amount_out = Uint256::from_be_bytes(match result.get(0..32) {
             Some(val) => val,
             None => {
                 return Err(Web3Error::ContractCallError(
@@ -963,7 +963,7 @@ impl Web3 {
         }
 
         // we only want the first value: sqrtPriceX96, a uint160 which occupies 20 bytes but is put at the right of a 32 byte buffer
-        let sqrt_price = Uint256::from_bytes_be(&slot0_result[32 - 20..32]);
+        let sqrt_price = Uint256::from_be_bytes(&slot0_result[32 - 20..32]);
 
         trace!("parsed sqrt_price {:X?}", sqrt_price);
         Ok(sqrt_price)
@@ -1061,12 +1061,12 @@ fn options_contains_glm(options: &[SendTxOption]) -> bool {
 
 // Checks that the input fee value is within the limits of uint24
 fn bad_fee(fee: &Uint256) -> bool {
-    *fee > *TT24M1
+    *fee > tt24m1()
 }
 
 // Checks that the input sqrt_price_limit value is within the limits of uint160
 fn bad_sqrt_price_limit(sqrt_price_limit: &Uint256) -> bool {
-    *sqrt_price_limit > *TT160M1
+    *sqrt_price_limit > tt160m1()
 }
 
 /// Computes the sqrt price of a pool given token_1's liquidity and token_0's liquidity
@@ -1094,10 +1094,10 @@ pub fn uniswap_v3_sqrt_price_from_amounts(amount_1: Uint256, amount_0: Uint256) 
     // This function calculates:
     //     sqrtPriceX96 = sqrt((10 * 2^192) / 1) = sqrt(10 / 1) * sqrt(2^192) = sqrt(10 / 1) * 2^96
 
-    let numerator: BigUint = amount_1.0 << 192; // amount1 * 2^192
-    let denominator: BigUint = amount_0.0;
+    let numerator: Uint256 = amount_1 << 192u8.into(); // amount1 * 2^192
+    let denominator: Uint256 = amount_0;
     let ratio_x192 = numerator / denominator;
-    Uint256(BigUint::sqrt(&ratio_x192))
+    Uint256::sqrt(&ratio_x192)
 }
 
 /// Encodes a given spot price as a Q64.96 sqrt price which Uniswap expects, used in limiting slippage

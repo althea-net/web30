@@ -10,7 +10,7 @@ use crate::types::{Block, Log, NewFilter, SyncingStatus, TransactionRequest, Tra
 use crate::types::{ConciseBlock, Data, SendTxOption};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
-use num::{ToPrimitive, Zero};
+use num_traits::{ToPrimitive, Zero};
 use num256::Uint256;
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};

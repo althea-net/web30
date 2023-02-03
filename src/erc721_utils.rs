@@ -1,7 +1,7 @@
 //! This module contains utility functions for interacting with ERC721 tokens and contracts
 use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
-use clarity::constants::ZERO_ADDRESS;
+use clarity::constants::zero_address;
 use clarity::Address as EthAddress;
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
 use clarity::{abi::Token, Address, Uint256};
@@ -35,7 +35,7 @@ impl Web3 {
 
         match owner_address {
             Ok(address_response) => {
-                if address_response == *ZERO_ADDRESS {
+                if address_response == zero_address() {
                     Ok(None)
                 } else {
                     Ok(Some(address_response))
@@ -222,7 +222,7 @@ impl Web3 {
             .simulate_transaction(erc721, 0u8.into(), payload, caller_address, None)
             .await?;
 
-        Ok(Uint256::from_bytes_be(match decimals.get(0..32) {
+        Ok(Uint256::from_be_bytes(match decimals.get(0..32) {
             Some(val) => val,
             None => {
                 return Err(Web3Error::ContractCallError(
@@ -299,7 +299,7 @@ fn test_erc721_metadata() {
         .parse()
         .unwrap();
     let token_id = 1039_i32;
-    let token_id_uint = Uint256::from_bytes_be(&token_id.to_be_bytes());
+    let token_id_uint = Uint256::from_be_bytes(&token_id.to_be_bytes());
     let token_id_uri = ":ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/1039";
     runner.block_on(async move {
         let num: Uint256 = 1000u32.into();

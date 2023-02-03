@@ -3,7 +3,7 @@ use crate::jsonrpc::error::Web3Error;
 use crate::{client::Web3, types::SendTxOption};
 use clarity::{abi::encode_call, PrivateKey as EthPrivateKey};
 use clarity::{Address, Uint256};
-use num::Bounded;
+use num_traits::Bounded;
 use std::time::Duration;
 use tokio::time::timeout as future_timeout;
 
@@ -29,7 +29,7 @@ impl Web3 {
             .simulate_transaction(erc20, 0u8.into(), payload, own_address, None)
             .await?;
 
-        let allowance = Uint256::from_bytes_be(match allowance.get(0..32) {
+        let allowance = Uint256::from_be_bytes(match allowance.get(0..32) {
             Some(val) => val,
             None => {
                 return Err(Web3Error::ContractCallError(
@@ -210,7 +210,7 @@ impl Web3 {
             .simulate_transaction(erc20, 0u8.into(), payload, requester_address, height)
             .await?;
 
-        Ok(Uint256::from_bytes_be(match balance.get(0..32) {
+        Ok(Uint256::from_be_bytes(match balance.get(0..32) {
             Some(val) => val,
             None => {
                 return Err(Web3Error::ContractCallError(
@@ -278,7 +278,7 @@ impl Web3 {
             .simulate_transaction(erc20, 0u8.into(), payload, caller_address, None)
             .await?;
 
-        Ok(Uint256::from_bytes_be(match decimals.get(0..32) {
+        Ok(Uint256::from_be_bytes(match decimals.get(0..32) {
             Some(val) => val,
             None => {
                 return Err(Web3Error::ContractCallError(
@@ -298,7 +298,7 @@ impl Web3 {
             .simulate_transaction(erc20, 0u8.into(), payload, caller_address, None)
             .await?;
 
-        Ok(Uint256::from_bytes_be(match decimals.get(0..32) {
+        Ok(Uint256::from_be_bytes(match decimals.get(0..32) {
             Some(val) => val,
             None => {
                 return Err(Web3Error::ContractCallError(
