@@ -37,7 +37,7 @@ pub enum Web3Error {
 
 impl From<ParseIntError> for Web3Error {
     fn from(error: ParseIntError) -> Self {
-        Web3Error::BadResponse(format!("{}", error))
+        Web3Error::BadResponse(format!("{error}"))
     }
 }
 
@@ -56,11 +56,11 @@ impl From<Elapsed> for Web3Error {
 impl Display for Web3Error {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
-            Web3Error::BadResponse(val) => write!(f, "Web3 bad response {}", val),
-            Web3Error::BadInput(val) => write!(f, "Web3 bad input {}", val),
-            Web3Error::FailedToSend(val) => write!(f, "Web3 Failed to send {}", val),
-            Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {}", val),
-            Web3Error::ClarityError(val) => write!(f, "ClarityError {}", val),
+            Web3Error::BadResponse(val) => write!(f, "Web3 bad response {val}"),
+            Web3Error::BadInput(val) => write!(f, "Web3 bad input {val}"),
+            Web3Error::FailedToSend(val) => write!(f, "Web3 Failed to send {val}"),
+            Web3Error::EventNotFound(val) => write!(f, "Web3 Failed to find event {val}"),
+            Web3Error::ClarityError(val) => write!(f, "ClarityError {val}"),
             Web3Error::TransactionTimeout => write!(f, "Transaction did not enter chain in time"),
             Web3Error::NoBlockProduced { time } => {
                 write!(
@@ -75,13 +75,13 @@ impl Display for Web3Error {
                 gas_required,
             } => {
                 write!(f, "Block has base_fee_per_gas {} and transaction requires {} gas. Your balance of {} < {}. Transaction impossible",
-            base_gas, gas_required, balance, base_gas.clone() * gas_required.clone())
+            base_gas, gas_required, balance, *base_gas * *gas_required)
             }
             Web3Error::ContractCallError(val) => {
-                write!(f, "Error performing Ethereum contract call {}", val)
+                write!(f, "Error performing Ethereum contract call {val}")
             }
             Web3Error::CouldNotRemoveFilter(val) => {
-                write!(f, "Web3 Failed to remove filter from server {}", val)
+                write!(f, "Web3 Failed to remove filter from server {val}")
             }
             Web3Error::JsonRpcError {
                 code,
@@ -89,11 +89,10 @@ impl Display for Web3Error {
                 data,
             } => write!(
                 f,
-                "Web3 Response error code {} message {} data {:?}",
-                code, message, data
+                "Web3 Response error code {code} message {message} data {data:?}"
             ),
             Web3Error::SyncingNode(val) => {
-                write!(f, "Web3 Node is syncing {}", val)
+                write!(f, "Web3 Node is syncing {val}")
             }
         }
     }

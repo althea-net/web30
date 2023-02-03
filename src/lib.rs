@@ -1,4 +1,5 @@
 #![warn(clippy::all)]
+#![allow(clippy::large_enum_variant)]
 #![allow(clippy::pedantic)]
 
 #[macro_use]

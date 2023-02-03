@@ -23,7 +23,7 @@ impl Web3 {
         own_address: Address,
         token_id: Uint256,
     ) -> Result<Option<EthAddress>, Web3Error> {
-        let payload = encode_call("getApproved(uint256)", &[Token::Uint(token_id.clone())])?;
+        let payload = encode_call("getApproved(uint256)", &[Token::Uint(token_id)])?;
 
         let val = self
             .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)
@@ -68,7 +68,7 @@ impl Web3 {
         // function approve(address _approved, uint256 _tokenId)
         let payload = encode_call(
             "approve(address,uint256)",
-            &[target_contract.into(), Token::Uint(token_id.clone())],
+            &[target_contract.into(), Token::Uint(token_id)],
         )?;
 
         let txid = self
@@ -84,11 +84,7 @@ impl Web3 {
 
         // wait for transaction to enter the chain if the user has requested it
         if let Some(timeout) = timeout {
-            future_timeout(
-                timeout,
-                self.wait_for_transaction(txid.clone(), timeout, None),
-            )
-            .await??;
+            future_timeout(timeout, self.wait_for_transaction(txid, timeout, None)).await??;
         }
 
         Ok(txid)
@@ -134,7 +130,7 @@ impl Web3 {
                     &[
                         sender_address.into(),
                         recipient.into(),
-                        Token::Uint(token_id.clone()),
+                        Token::Uint(token_id),
                     ],
                 )?,
                 0u32.into(),
@@ -145,11 +141,7 @@ impl Web3 {
             .await?;
 
         if let Some(timeout) = wait_timeout {
-            future_timeout(
-                timeout,
-                self.wait_for_transaction(tx_hash.clone(), timeout, None),
-            )
-            .await??;
+            future_timeout(timeout, self.wait_for_transaction(tx_hash, timeout, None)).await??;
         }
 
         Ok(tx_hash)
@@ -241,7 +233,7 @@ impl Web3 {
         caller_address: Address,
         token_id: Uint256,
     ) -> Result<String, Web3Error> {
-        let payload = encode_call("tokenURI(uint256)", &[Token::Uint(token_id.clone())])?;
+        let payload = encode_call("tokenURI(uint256)", &[Token::Uint(token_id)])?;
         let symbol = self
             .simulate_transaction(erc721, 0u8.into(), payload, caller_address, None)
             .await?;
@@ -269,7 +261,7 @@ impl Web3 {
         own_address: Address,
         token_id: Uint256,
     ) -> Result<EthAddress, Web3Error> {
-        let payload = encode_call("ownerOf(uint256)", &[Token::Uint(token_id.clone())])?;
+        let payload = encode_call("ownerOf(uint256)", &[Token::Uint(token_id)])?;
 
         let val = self
             .simulate_transaction(erc721, 0u8.into(), payload, own_address, None)

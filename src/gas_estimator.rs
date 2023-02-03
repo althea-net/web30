@@ -87,7 +87,7 @@ impl GasTracker {
 
     /// Gets the most recently stored gas price
     pub fn latest_gas_price(&self) -> Option<Uint256> {
-        self.history.front().map(|price| price.sample.clone())
+        self.history.front().map(|price| price.sample)
     }
 
     /// Samples Ethereum gas prices and creates a new GasPriceEntry on success
@@ -151,7 +151,7 @@ impl GasTracker {
         // this should never panic as percentage is less than 1 and vector len is
         // included as a factor
         let lowest: usize = (percentage * vector.len() as f32).floor() as usize;
-        Some(vector[lowest].sample.clone())
+        Some(vector[lowest].sample)
     }
 }
 
@@ -174,10 +174,8 @@ fn test_gas_storage() {
         let gas = gas.expect("Actix failure");
 
         assert!(
-            track.is_some() && gas == track.clone().unwrap(),
-            "bad gas price stored - actual {} != stored {:?}",
-            gas,
-            track
+            track.is_some() && gas == track.unwrap(),
+            "bad gas price stored - actual {gas} != stored {track:?}"
         );
     });
 }
@@ -228,11 +226,7 @@ fn test_acceptable_gas_price() {
         let acceptable = acceptable.unwrap();
         assert!(
             acceptable <= expected_high && acceptable >= expected_low,
-            "percentage {:.8} expected range [{:?} <= {:?} <= {:?}]",
-            percent,
-            expected_low,
-            acceptable,
-            expected_high,
+            "percentage {percent:.8} expected range [{expected_low:?} <= {acceptable:?} <= {expected_high:?}]",
         )
     }
 }

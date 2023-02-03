@@ -127,7 +127,7 @@ impl Ord for TransactionResponse {
     /// number transactions without a block are greater than transactions with one and
     /// are sorted by nonce when in the same block or without a block.
     fn cmp(&self, other: &Self) -> Ordering {
-        match (self.block_number.clone(), other.block_number.clone()) {
+        match (self.block_number, other.block_number) {
             (Some(self_block), Some(other_block)) => {
                 if self_block != other_block {
                     self_block.cmp(&other_block)
@@ -347,7 +347,7 @@ mod tests {
         runner.block_on(async move {
             let res = web3.eth_get_block_by_number(10750715u32.into()).await;
             if res.is_err() {
-                println!("{:?}", res);
+                println!("{res:?}");
                 System::current().stop_with_code(1);
             }
         });
@@ -374,7 +374,7 @@ mod tests {
         )
         .unwrap();
 
-        println!("{:#?}", res);
+        println!("{res:#?}");
     }
 
     #[test]

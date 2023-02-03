@@ -66,8 +66,7 @@ impl HttpClient {
             Ok(val) => val,
             Err(e) => {
                 return Err(Web3Error::BadResponse(format!(
-                    "Size Limit {} Web3 Error {}",
-                    request_size_limit, e
+                    "Size Limit {request_size_limit} Web3 Error {e}"
                 )))
             }
         };

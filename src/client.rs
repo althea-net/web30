@@ -10,8 +10,8 @@ use crate::types::{Block, Log, NewFilter, SyncingStatus, TransactionRequest, Tra
 use crate::types::{ConciseBlock, Data, SendTxOption};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
-use num_traits::{ToPrimitive, Zero};
 use num256::Uint256;
+use num_traits::{ToPrimitive, Zero};
 use std::{cmp::min, time::Duration};
 use std::{sync::Arc, time::Instant};
 use tokio::time::sleep as delay_for;
@@ -257,7 +257,7 @@ impl Web3 {
             self.jsonrpc_client
                 .request_method(
                     "eth_getBlockByNumber",
-                    (format!("{:#x}", block_number), true),
+                    (format!("{block_number:#x}"), true),
                     self.timeout,
                 )
                 .await
@@ -281,7 +281,7 @@ impl Web3 {
             self.jsonrpc_client
                 .request_method(
                     "eth_getBlockByNumber",
-                    (format!("{:#x}", block_number), false),
+                    (format!("{block_number:#x}"), false),
                     self.timeout,
                 )
                 .await
@@ -375,7 +375,7 @@ impl Web3 {
                 "eth_getTransactionByHash",
                 // XXX: Technically it doesn't need to be Uint256, but since send_raw_transaction is
                 // returning it we'll keep it consistent.
-                vec![format!("{:#066x}", hash)],
+                vec![format!("{hash:#066x}")],
                 self.timeout,
             )
             .await
@@ -391,7 +391,7 @@ impl Web3 {
         self.jsonrpc_client
             .request_method(
                 "evm_revert",
-                vec![format!("{:#066x}", snapshot_id)],
+                vec![format!("{snapshot_id:#066x}")],
                 self.timeout,
             )
             .await
@@ -461,16 +461,14 @@ impl Web3 {
         let mut gas_limit = if let Some(gl) = gas_limit {
             gl
         } else {
-            let gas = self
-                .simulated_gas_price_and_limit(our_balance.clone())
-                .await?;
+            let gas = self.simulated_gas_price_and_limit(our_balance).await?;
             self.eth_estimate_gas(TransactionRequest {
                 from: Some(own_address),
                 to: to_address,
-                nonce: Some(nonce.clone().into()),
+                nonce: Some(nonce.into()),
                 gas_price: Some(gas.price.into()),
                 gas: Some(gas.limit.into()),
-                value: Some(value.clone().into()),
+                value: Some(value.into()),
                 data: Some(data.clone().into()),
             })
             .await?
@@ -494,10 +492,10 @@ impl Web3 {
         // be valid, we simply don't have the the funds to pay the full gas amount we are promising
         // this segment computes either the highest valid gas price we can pay or in the post-london
         // chain case errors if we can't meet the minimum fee
-        if gas_price.clone() * gas_limit.clone() > our_balance {
+        if gas_price * gas_limit > our_balance {
             let base_fee_per_gas = self.get_base_fee_per_gas().await?;
             if let Some(base_fee_per_gas) = base_fee_per_gas {
-                if base_fee_per_gas.clone() * gas_limit.clone() > our_balance {
+                if base_fee_per_gas * gas_limit > our_balance {
                     return Err(Web3Error::InsufficientGas {
                         balance: our_balance,
                         base_gas: base_fee_per_gas,
@@ -507,7 +505,7 @@ impl Web3 {
             }
             // this will give some value >= base_fee_per_gas * gas_limit
             // in post-london and some non zero value in pre-london
-            gas_price = our_balance / gas_limit.clone();
+            gas_price = our_balance / gas_limit;
         }
 
         let transaction = Transaction {
@@ -565,9 +563,9 @@ impl Web3 {
             from: Some(own_address),
             to: contract_address,
             gas: Some(gas.limit.into()),
-            nonce: Some(nonce.clone().into()),
+            nonce: Some(nonce.into()),
             gas_price: Some(gas.price.into()),
-            value: Some(value.clone().into()),
+            value: Some(value.into()),
             data: Some(data.clone().into()),
         };
 
@@ -601,7 +599,7 @@ impl Web3 {
         let start = Instant::now();
         loop {
             delay_for(Duration::from_secs(1)).await;
-            match self.eth_get_transaction_by_hash(tx_hash.clone()).await {
+            match self.eth_get_transaction_by_hash(tx_hash).await {
                 Ok(maybe_transaction) => {
                     if let Some(transaction) = maybe_transaction {
                         // if no wait time is specified and the tx is in a block return right away
@@ -610,7 +608,7 @@ impl Web3 {
                         }
                         // One the tx is in a block we start waiting here
                         else if let (Some(blocks_to_wait), Some(tx_block)) =
-                            (blocks_to_wait.clone(), transaction.block_number.clone())
+                            (blocks_to_wait, transaction.block_number)
                         {
                             let current_block = self.eth_block_number().await?;
                             // we check for underflow, which is possible on testnets
@@ -661,7 +659,7 @@ impl Web3 {
     ) -> Result<SimulatedGas, Web3Error> {
         const GAS_LIMIT: u128 = 12450000;
         let gas_price = self.eth_gas_price().await?;
-        let limit = min(GAS_LIMIT.into(), balance / gas_price.clone());
+        let limit = min(GAS_LIMIT.into(), balance / gas_price);
         Ok(SimulatedGas {
             limit,
             price: gas_price,
@@ -684,7 +682,7 @@ impl Web3 {
         let start = Instant::now();
         let mut last_height: Option<Uint256> = None;
         while Instant::now() - start < timeout {
-            match (self.eth_block_number().await, last_height.clone()) {
+            match (self.eth_block_number().await, last_height) {
                 (Ok(n), None) => last_height = Some(n),
                 (Ok(block_height), Some(last_height)) => {
                     if block_height > last_height {
@@ -818,21 +816,21 @@ fn test_syncing_check_functions() {
         let val = web3
             .eth_get_balance(Address::parse_and_validate(random_address).unwrap())
             .await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         let val = web3
             .eth_get_transaction_count(Address::parse_and_validate(random_address).unwrap())
             .await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         let val = web3.eth_block_number().await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         let val = web3.eth_synced_block_number().await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         let val = web3.eth_gas_price().await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         //// CHECK THAT when using syncing block, we retrieve a synced block without error
         // let val = web3.eth_get_block_by_number(4792816_u128.into()).await;
@@ -848,7 +846,7 @@ fn test_syncing_check_functions() {
         let val = web3
             .eth_get_block_by_number(web3.eth_block_number().await.unwrap())
             .await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         #[allow(unused_variables)]
         let val = web3.eth_get_block_by_number(20000000_u128.into()).await;
@@ -863,7 +861,7 @@ fn test_syncing_check_functions() {
         let val = web3
             .eth_get_concise_block_by_number(web3.eth_block_number().await.unwrap() + 1_u128.into())
             .await;
-        println!("{:?}", val);
+        println!("{val:?}");
 
         #[allow(unused_variables)]
         let val = web3.eth_get_latest_block().await;

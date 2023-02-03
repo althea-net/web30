@@ -110,7 +110,7 @@ impl Web3 {
         let mut found_log = None;
         while Instant::now() - start < wait_for {
             delay_for(Duration::from_secs(1)).await;
-            let logs = match self.eth_get_filter_changes(filter_id.clone()).await {
+            let logs = match self.eth_get_filter_changes(filter_id).await {
                 Ok(changes) => changes,
                 Err(e) => return Err(e),
             };
@@ -123,7 +123,7 @@ impl Web3 {
         }
 
         if let Err(e) = self.eth_uninstall_filter(filter_id).await {
-            return Err(Web3Error::CouldNotRemoveFilter(format!("{}", e)));
+            return Err(Web3Error::CouldNotRemoveFilter(format!("{e}")));
         }
 
         match found_log {
@@ -142,13 +142,13 @@ impl Web3 {
         events: Vec<&str>,
     ) -> Result<Vec<Log>, Web3Error> {
         // Build a filter with specified topics
-        let from_block = Some(format!("{:#x}", start_block));
+        let from_block = Some(format!("{start_block:#x}"));
         let to_block;
         if let Some(end_block) = end_block {
-            to_block = Some(format!("{:#x}", end_block));
+            to_block = Some(format!("{end_block:#x}"));
         } else {
             let latest_block = self.eth_block_number().await?;
-            to_block = Some(format!("{:#x}", latest_block));
+            to_block = Some(format!("{latest_block:#x}"));
         }
 
         let mut final_topics = Vec::new();
@@ -177,13 +177,13 @@ impl Web3 {
         topics: Vec<Vec<[u8; 32]>>,
     ) -> Result<Vec<Log>, Web3Error> {
         // Build a filter with specified topics
-        let from_block = Some(format!("{:#x}", start_block));
+        let from_block = Some(format!("{start_block:#x}"));
         let to_block;
         if let Some(end_block) = end_block {
-            to_block = Some(format!("{:#x}", end_block));
+            to_block = Some(format!("{end_block:#x}"));
         } else {
             let latest_block = self.eth_block_number().await?;
-            to_block = Some(format!("{:#x}", latest_block));
+            to_block = Some(format!("{latest_block:#x}"));
         }
 
         let mut final_topics = Vec::new();

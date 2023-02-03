@@ -79,11 +79,7 @@ impl Web3 {
 
         // wait for transaction to enter the chain if the user has requested it
         if let Some(timeout) = timeout {
-            future_timeout(
-                timeout,
-                self.wait_for_transaction(txid.clone(), timeout, None),
-            )
-            .await??;
+            future_timeout(timeout, self.wait_for_transaction(txid, timeout, None)).await??;
         }
 
         Ok(txid)
@@ -128,7 +124,7 @@ impl Web3 {
                 erc20,
                 encode_call(
                     "transfer(address,uint256)",
-                    &[recipient.into(), amount.clone().into()],
+                    &[recipient.into(), amount.into()],
                 )?,
                 0u32.into(),
                 sender_address,
@@ -138,11 +134,7 @@ impl Web3 {
             .await?;
 
         if let Some(timeout) = wait_timeout {
-            future_timeout(
-                timeout,
-                self.wait_for_transaction(tx_hash.clone(), timeout, None),
-            )
-            .await??;
+            future_timeout(timeout, self.wait_for_transaction(tx_hash, timeout, None)).await??;
         }
 
         Ok(tx_hash)
