@@ -661,6 +661,14 @@ impl Web3 {
     ) -> Result<SimulatedGas, Web3Error> {
         const GAS_LIMIT: u128 = 12450000;
         let gas_price = self.eth_gas_price().await?;
+        // Shortcut if the chain has no gas price
+        if gas_price == 0u8.into() {
+            return Ok(SimulatedGas {
+                limit: GAS_LIMIT.into(),
+                price: gas_price,
+            });
+        }
+
         let limit = min(GAS_LIMIT.into(), balance / gas_price.clone());
         Ok(SimulatedGas {
             limit,
