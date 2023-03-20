@@ -15,13 +15,12 @@ impl Web3 {
         weth_address: Option<Address>,
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
-        let own_address = secret.to_address();
         let sig = "deposit()";
         let tokens = [];
         let payload = encode_call(sig, &tokens).unwrap();
         let weth_address = weth_address.unwrap_or(*WETH_CONTRACT_ADDRESS);
         let txid = self
-            .send_transaction(weth_address, payload, amount, own_address, secret, vec![])
+            .send_transaction(weth_address, payload, amount, secret, vec![])
             .await?;
 
         if let Some(timeout) = wait_timeout {
@@ -37,7 +36,6 @@ impl Web3 {
         weth_address: Option<Address>,
         wait_timeout: Option<Duration>,
     ) -> Result<Uint256, Web3Error> {
-        let own_address = secret.to_address();
         let sig = "withdraw(uint256)";
         let tokens = [Token::Uint(amount)];
         let payload = encode_call(sig, &tokens).unwrap();
@@ -47,7 +45,6 @@ impl Web3 {
                 weth_address,
                 payload,
                 0u16.into(),
-                own_address,
                 secret,
                 vec![],
             )

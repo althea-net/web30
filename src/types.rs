@@ -295,12 +295,12 @@ pub struct ConciseBlock {
 /// Used to configure send_transaction
 #[derive(Debug, Clone, PartialEq)]
 pub enum SendTxOption {
-    GasPrice(Uint256),
-    GasPriceMultiplier(f32),
+    GasMaxFee(Uint256),
+    GasPriorityFee(Uint256),
     GasLimitMultiplier(f32),
     GasLimit(Uint256),
-    NetworkId(u64),
     Nonce(Uint256),
+    AccessList(Vec<(Address, Vec<Uint256>)>)
 }
 
 fn parse_possibly_empty_hex_val<'de, D>(deserializer: D) -> Result<Uint256, D::Error>

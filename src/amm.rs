@@ -602,7 +602,6 @@ impl Web3 {
                 router,
                 payload,
                 0u32.into(),
-                eth_address,
                 eth_private_key,
                 options,
             )
@@ -829,7 +828,6 @@ impl Web3 {
                 router,
                 payload,
                 amount,
-                eth_address,
                 eth_private_key,
                 options,
             )
