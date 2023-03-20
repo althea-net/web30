@@ -33,6 +33,7 @@ pub enum Web3Error {
         time: Duration,
     },
     SyncingNode(String),
+    PreLondon
 }
 
 impl From<ParseIntError> for Web3Error {
@@ -93,6 +94,9 @@ impl Display for Web3Error {
             ),
             Web3Error::SyncingNode(val) => {
                 write!(f, "Web3 Node is syncing {val}")
+            }
+            Web3Error::PreLondon => {
+                write!(f, "Web3, this function sends EIP1559 tx but the connected chain does not support them!")
             }
         }
     }

@@ -10,6 +10,7 @@ use crate::types::{Block, Log, NewFilter, SyncingStatus, TransactionRequest, Tra
 use crate::types::{ConciseBlock, Data, SendTxOption};
 use clarity::utils::bytes_to_hex_str;
 use clarity::{Address, PrivateKey, Transaction};
+use futures::future::join4;
 use num256::Uint256;
 use num_traits::{ToPrimitive, Zero};
 use std::{cmp::min, time::Duration};
@@ -400,27 +401,43 @@ impl Web3 {
     /// Sends a transaction which changes blockchain state.
     /// `options` takes a vector of `SendTxOption` for configuration
     /// unlike the lower level eth_send_transaction() this call builds
-    /// the transaction abstracting away details like chain id, gas,
-    /// and network id.
-    /// WARNING: you must specify networkID in situations where a single
-    /// node is operating no more than one chain. Otherwise it is possible
-    /// for the full node to trick the client into signing transactions
-    /// on unintended chains potentially to their benefit
+    /// the transaction abstracting away details like gas,
     pub async fn send_transaction(
         &self,
         to_address: Address,
         data: Vec<u8>,
         value: Uint256,
-        own_address: Address,
         secret: PrivateKey,
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
-        let mut gas_price = None;
-        let mut gas_price_multiplier = 1f32;
+        let mut max_priority_fee_per_gas = 0u8.into();
         let mut gas_limit_multiplier = 1f32;
         let mut gas_limit = None;
-        let mut network_id = None;
-        let our_balance = self.eth_get_balance(own_address).await?;
+        let mut access_list = Vec::new();
+        let own_address = secret.to_address();
+
+        let our_balance = self.eth_get_balance(own_address);
+        let nonce = self.eth_get_transaction_count(own_address);
+        let max_fee_per_gas = self.get_base_fee_per_gas();
+        let chain_id = self.net_version();
+
+        // request in parallel
+        let (our_balance, nonce, base_fee_per_gas, chain_id) =
+            join4(our_balance, nonce, max_fee_per_gas, chain_id).await;
+
+        let (our_balance, mut nonce, base_fee_per_gas, chain_id) =
+            (our_balance?, nonce?, base_fee_per_gas?, chain_id?);
+
+        // check if we can send an EIP1559 tx on this chain
+        let base_fee_per_gas = match base_fee_per_gas {
+            Some(bf) => bf,
+            None => return Err(Web3Error::PreLondon),
+        };
+
+        // max_fee_per_gas is base gas multiplied by 10, this is a maximum the actual price we pay is determined
+        // by the block the transaction enters
+        let mut max_fee_per_gas = base_fee_per_gas * 10u8.into();
+
         if our_balance.is_zero() || our_balance < ETHEREUM_INTRINSIC_GAS.into() {
             // We only know that the balance is insufficient, we don't know how much gas is needed
             return Err(Web3Error::InsufficientGas {
@@ -429,34 +446,17 @@ impl Web3 {
                 gas_required: ETHEREUM_INTRINSIC_GAS.into(),
             });
         }
-        let mut nonce = self.eth_get_transaction_count(own_address).await?;
 
         for option in options {
             match option {
-                SendTxOption::GasPrice(gp) => gas_price = Some(gp),
-                SendTxOption::GasPriceMultiplier(gpm) => gas_price_multiplier = gpm,
+                SendTxOption::GasMaxFee(gp) => max_fee_per_gas = gp,
+                SendTxOption::GasPriorityFee(gp) => max_priority_fee_per_gas = gp,
                 SendTxOption::GasLimitMultiplier(glm) => gas_limit_multiplier = glm,
                 SendTxOption::GasLimit(gl) => gas_limit = Some(gl),
-                SendTxOption::NetworkId(ni) => network_id = Some(ni),
                 SendTxOption::Nonce(n) => nonce = n,
+                SendTxOption::AccessList(list) => access_list = list,
             }
         }
-
-        let mut gas_price = if let Some(gp) = gas_price {
-            gp
-        } else {
-            let gas_price = self.eth_gas_price().await?;
-            let f32_gas = gas_price.to_u128();
-            if let Some(v) = f32_gas {
-                // convert to f32, multiply, then convert back, this
-                // will be lossy but you want an exact price you can set it
-                ((v as f32 * gas_price_multiplier) as u128).into()
-            } else {
-                // gas price is insanely high, best effort rounding
-                // perhaps we should panic here
-                gas_price * (gas_price_multiplier.round() as u128).into()
-            }
-        };
 
         let mut gas_limit = if let Some(gl) = gas_limit {
             gl
@@ -482,48 +482,41 @@ impl Web3 {
             gas_limit *= (gas_limit_multiplier.round() as u128).into()
         }
 
-        let network_id = if let Some(ni) = network_id {
-            ni
-        } else {
-            self.net_version().await?
-        };
-
         // this is an edge case where we are about to send a transaction that can't possibly
         // be valid, we simply don't have the the funds to pay the full gas amount we are promising
         // this segment computes either the highest valid gas price we can pay or in the post-london
         // chain case errors if we can't meet the minimum fee
-        if gas_price * gas_limit > our_balance {
-            let base_fee_per_gas = self.get_base_fee_per_gas().await?;
-            if let Some(base_fee_per_gas) = base_fee_per_gas {
-                if base_fee_per_gas * gas_limit > our_balance {
-                    return Err(Web3Error::InsufficientGas {
-                        balance: our_balance,
-                        base_gas: base_fee_per_gas,
-                        gas_required: gas_limit,
-                    });
-                }
+        if max_fee_per_gas * gas_limit > our_balance {
+            if base_fee_per_gas * gas_limit > our_balance {
+                return Err(Web3Error::InsufficientGas {
+                    balance: our_balance,
+                    base_gas: base_fee_per_gas,
+                    gas_required: gas_limit,
+                });
             }
             // this will give some value >= base_fee_per_gas * gas_limit
             // in post-london and some non zero value in pre-london
-            gas_price = our_balance / gas_limit;
+            max_fee_per_gas = our_balance / gas_limit;
         }
 
-        let transaction = Transaction {
-            to: to_address,
+        let transaction = Transaction::Eip1559Transaction {
+            chain_id: chain_id.into(),
             nonce,
-            gas_price,
+            max_priority_fee_per_gas,
+            max_fee_per_gas,
             gas_limit,
+            to: to_address,
             value,
             data,
             signature: None,
+            access_list,
         };
 
-        let transaction = transaction.sign(&secret, Some(network_id));
+        let transaction = transaction.sign(&secret, None);
 
         self.eth_send_raw_transaction(
             transaction
                 .to_bytes()
-                .expect("transaction.to_bytes() failed"),
         )
         .await
     }

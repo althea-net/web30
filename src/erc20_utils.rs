@@ -60,7 +60,6 @@ impl Web3 {
         timeout: Option<Duration>,
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
-        let own_address = eth_private_key.to_address();
         let payload = encode_call(
             "approve(address,uint256)",
             &[target_contract.into(), Uint256::max_value().into()],
@@ -71,7 +70,6 @@ impl Web3 {
                 erc20,
                 payload,
                 0u32.into(),
-                own_address,
                 eth_private_key,
                 options,
             )
@@ -103,8 +101,6 @@ impl Web3 {
         wait_timeout: Option<Duration>,
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
-        let sender_address = sender_private_key.to_address();
-
         // if the user sets a gas limit we should honor it, if they don't we
         // should add the default
         let mut has_gas_limit = false;
@@ -127,7 +123,6 @@ impl Web3 {
                     &[recipient.into(), amount.into()],
                 )?,
                 0u32.into(),
-                sender_address,
                 sender_private_key,
                 options,
             )

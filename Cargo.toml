@@ -24,3 +24,5 @@ num-traits = "0.2"
 actix = "0.13"
 env_logger = "0.10"
 
+[patch.crates-io]
+clarity = {git = "https://github.com/althea-net/clarity.git", ref = "112453b9c94d07246d48412b10d668cc4843b252"}

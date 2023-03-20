@@ -64,7 +64,6 @@ impl Web3 {
         timeout: Option<Duration>,
         options: Vec<SendTxOption>,
     ) -> Result<Uint256, Web3Error> {
-        let own_address = eth_private_key.to_address();
         // function approve(address _approved, uint256 _tokenId)
         let payload = encode_call(
             "approve(address,uint256)",
@@ -76,7 +75,6 @@ impl Web3 {
                 erc721,
                 payload,
                 0u32.into(),
-                own_address,
                 eth_private_key,
                 options,
             )
@@ -134,7 +132,6 @@ impl Web3 {
                     ],
                 )?,
                 0u32.into(),
-                sender_address,
                 sender_private_key,
                 options,
             )
