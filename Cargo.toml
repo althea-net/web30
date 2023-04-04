@@ -11,7 +11,7 @@ repository = "https://github.com/althea-net/web30"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-clarity = "0.7"
+clarity = {git = "https://github.com/althea-net/clarity.git", rev = "112453b9c94d07246d48412b10d668cc4843b252"}
 num256 = "0.5"
 futures = "0.3"
 awc = {version = "3.1.1", default-features = false, features=["openssl", "compress-gzip", "compress-zstd"]}
@@ -25,4 +25,3 @@ actix = "0.13"
 env_logger = "0.10"
 
 [patch.crates-io]
-clarity = {git = "https://github.com/althea-net/clarity.git", ref = "112453b9c94d07246d48412b10d668cc4843b252"}

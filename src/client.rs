@@ -514,11 +514,7 @@ impl Web3 {
 
         let transaction = transaction.sign(&secret, None);
 
-        self.eth_send_raw_transaction(
-            transaction
-                .to_bytes()
-        )
-        .await
+        self.eth_send_raw_transaction(transaction.to_bytes()).await
     }
 
     /// Simulates an Ethereum contract call by making a fake transaction and sending it to a special endpoint

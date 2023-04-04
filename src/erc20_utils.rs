@@ -66,13 +66,7 @@ impl Web3 {
         )?;
 
         let txid = self
-            .send_transaction(
-                erc20,
-                payload,
-                0u32.into(),
-                eth_private_key,
-                options,
-            )
+            .send_transaction(erc20, payload, 0u32.into(), eth_private_key, options)
             .await?;
 
         // wait for transaction to enter the chain if the user has requested it

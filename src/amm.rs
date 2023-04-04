@@ -598,13 +598,7 @@ impl Web3 {
 
         trace!("payload is  {:?}", payload);
         let txid = self
-            .send_transaction(
-                router,
-                payload,
-                0u32.into(),
-                eth_private_key,
-                options,
-            )
+            .send_transaction(router, payload, 0u32.into(), eth_private_key, options)
             .await?;
         debug!(
             "txid for uniswap swap is {}",
@@ -824,13 +818,7 @@ impl Web3 {
 
         debug!("payload is  {:?}", payload);
         let txid = self
-            .send_transaction(
-                router,
-                payload,
-                amount,
-                eth_private_key,
-                options,
-            )
+            .send_transaction(router, payload, amount, eth_private_key, options)
             .await?;
         debug!(
             "txid for uniswap swap is {}",

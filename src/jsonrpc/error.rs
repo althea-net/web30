@@ -33,7 +33,7 @@ pub enum Web3Error {
         time: Duration,
     },
     SyncingNode(String),
-    PreLondon
+    PreLondon,
 }
 
 impl From<ParseIntError> for Web3Error {

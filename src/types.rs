@@ -300,7 +300,7 @@ pub enum SendTxOption {
     GasLimitMultiplier(f32),
     GasLimit(Uint256),
     Nonce(Uint256),
-    AccessList(Vec<(Address, Vec<Uint256>)>)
+    AccessList(Vec<(Address, Vec<Uint256>)>),
 }
 
 fn parse_possibly_empty_hex_val<'de, D>(deserializer: D) -> Result<Uint256, D::Error>
