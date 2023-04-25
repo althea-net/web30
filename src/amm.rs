@@ -36,6 +36,9 @@ lazy_static! {
     /// The USDC contract address, on prod Ethereum
     pub static ref USDC_CONTRACT_ADDRESS: Address =
         Address::parse_and_validate("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap();
+    /// The USDT contract address, on prod Ethereum
+    pub static ref USDT_CONTRACT_ADDRESS: Address =
+        Address::parse_and_validate("0xdAC17F958D2ee523a2206206994597C13D831ec7").unwrap();
 
     // The suggested Uniswap v3 pool fee levels in order:
     // 0.3% (most pairs), 0.05% (for stable pairs), 0.01% (very stable pairs), 1% (exotic pairs)
